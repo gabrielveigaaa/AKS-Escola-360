@@ -1,0 +1,253 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-01-15T12:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:2026.1",
+  "resources": [
+    {
+      "_id": "wrk_escola360",
+      "_type": "workspace",
+      "name": "Escola360 API",
+      "description": "Workspace for local testing",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_escola360",
+      "name": "Environment",
+      "data": {
+        "base_url": "http://localhost:3000/api",
+        "id_example": 1
+      }
+    },
+    {
+      "_id": "fld_entities",
+      "_type": "request_group",
+      "parentId": "wrk_escola360",
+      "name": "Entities"
+    },
+
+
+    {
+      "_id": "req_usuarios_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Usuarios (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/usuarios",
+      "headers": []
+    },
+    {
+      "_id": "req_usuarios_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Usuario (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/usuarios",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"João Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"senha_hash\": \"hash-de-exemplo\",\n  \"ativo\": true\n}" }
+    },
+
+
+    {
+      "_id": "req_perfis_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Perfis (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/perfis"
+    },
+    {
+      "_id": "req_perfis_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Perfil (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/perfis",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"ADMIN\"\n}" }
+    },
+
+
+    {
+      "_id": "req_prof_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Professores (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/professores"
+    },
+    {
+      "_id": "req_prof_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Professor (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/professores",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_usuario\": 1,\n  \"cpf\": \"12345678901\",\n  \"data_admissao\": \"2024-02-01\"\n}" }
+    },
+
+
+    {
+      "_id": "req_alunos_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Alunos (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/alunos"
+    },
+    {
+      "_id": "req_alunos_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Aluno (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/alunos",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_usuario\": 2,\n  \"cpf\": \"98765432100\",\n  \"data_nascimento\": \"2010-05-15\"\n}" }
+    },
+
+
+    {
+      "_id": "req_turmas_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Turmas (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/turmas"
+    },
+    {
+      "_id": "req_turmas_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Turma (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/turmas",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"6º Ano A\",\n  \"ano_letivo\": 2026,\n  \"turno\": \"MANHA\",\n  \"ativa\": true\n}" }
+    },
+
+ 
+    {
+      "_id": "req_disc_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Disciplinas (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/disciplinas"
+    },
+    {
+      "_id": "req_disc_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Disciplina (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/disciplinas",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"Matemática\",\n  \"carga_horaria\": 80\n}" }
+    },
+
+
+    {
+      "_id": "req_td_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Turma-Disciplinas (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/turma-disciplinas"
+    },
+    {
+      "_id": "req_td_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Turma-Disciplina (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/turma-disciplinas",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_turma\": 1,\n  \"id_disciplina\": 1,\n  \"id_professor\": 1\n}" }
+    },
+
+    
+    {
+      "_id": "req_mat_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Matrículas (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/matriculas"
+    },
+    {
+      "_id": "req_mat_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Matrícula (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/matriculas",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_aluno\": 1,\n  \"id_turma\": 1,\n  \"data_matricula\": \"2026-01-10\"\n}" }
+    },
+
+  
+    {
+      "_id": "req_av_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Avaliações (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/avaliacoes"
+    },
+    {
+      "_id": "req_av_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Avaliação (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/avaliacoes",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_turma_disciplina\": 1,\n  \"descricao\": \"Prova B1\",\n  \"data_avaliacao\": \"2026-03-15\",\n  \"peso\": 2.00\n}" }
+    },
+
+
+    {
+      "_id": "req_notas_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Notas (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/notas"
+    },
+    {
+      "_id": "req_notas_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Nota (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/notas",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_avaliacao\": 1,\n  \"id_matricula\": 1,\n  \"nota\": 8.5\n}" }
+    },
+
+
+    {
+      "_id": "req_freq_list",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "GET Frequências (list)",
+      "method": "GET",
+      "url": "{{ base_url }}/frequencias"
+    },
+    {
+      "_id": "req_freq_create",
+      "_type": "request",
+      "parentId": "fld_entities",
+      "name": "POST Frequência (create)",
+      "method": "POST",
+      "url": "{{ base_url }}/frequencias",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": { "mimeType": "application/json", "text": "{\n  \"id_matricula\": 1,\n  \"id_turma_disciplina\": 1,\n  \"data\": \"2026-03-15\",\n  \"status\": \"PRESENTE\"\n}" }
+    }
+
+  ]
+}
