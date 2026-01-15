@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Escola360 - Frontend (single-file)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Tailwind theme extension for school palette
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              schoolBlue: {
+                50: '#f3f8fb',
+                100: '#e6f1f8',
+                500: '#0f6aa8',
+                700: '#0b4f7a'
+              },
+              schoolGreen: {
+                50: '#f3fbf6',
+                500: '#14a76c'
+              },
+              softPurple: '#8b6acb'
+            }
+          }
+        }
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  </head>
+  <body class="bg-slate-50 font-sans">
+    <div class="min-h-screen flex">
+      <aside class="w-72 p-6 bg-white shadow-lg">
+        <div class="mb-6 p-3 rounded-md text-white" style="background: linear-gradient(90deg,#0f6aa8 0%, #8b6acb 100%)">
+          <h1 class="text-xl font-semibold">Escola360</h1>
+          <div class="text-xs opacity-90">Painel de teste</div>
+        </div>
+        <div id="menu" class="space-y-2"></div>
+        <div class="mt-6 text-sm text-slate-500">
+          <div>API base:</div>
+          <input id="apiBase" class="mt-1 w-full border rounded px-2 py-1 text-xs" value="http://localhost:3000/api" />
+          <button id="btnApplyBase" class="mt-2 w-full px-3 py-2 bg-schoolBlue-500 text-white rounded">Aplicar URL</button>
+        </div>
+      </aside>
+
+      <main class="flex-1 p-6">
+        <div id="content">
+          <div class="p-4 text-slate-600">Selecione uma entidade no menu à esquerda para testar o backend.</div>
+        </div>
+      </main>
+    </div>
+
+    <template id="table-row-tpl">
+      <tr class="border-b hover:bg-slate-50"></tr>
+    </template>
+
+    <script>
+    (function(){
+      const ENTITIES = {
+        'usuarios': { label: 'Usuários', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha_hash',label:'Senha (hash)',type:'text'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
+        'perfis': { label: 'Perfis', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
+        'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'ID Usuário',type:'number'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
+        'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'ID Usuário',type:'number'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
+        'turmas': { label: 'Turmas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'ano_letivo',label:'Ano Letivo',type:'number'},{name:'turno',label:'Turno',type:'select',options:['MANHA','TARDE','NOITE']},{name:'ativa',label:'Ativa',type:'checkbox'} ] },
+        'disciplinas': { label: 'Disciplinas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'carga_horaria',label:'Carga Horária',type:'number'} ] },
+        'turma-disciplinas': { label: 'Turma-Disciplinas', fields: [ {name:'id_turma',label:'ID Turma',type:'number'},{name:'id_disciplina',label:'ID Disciplina',type:'number'},{name:'id_professor',label:'ID Professor',type:'number'} ] },
+        'matriculas': { label: 'Matrículas', fields: [ {name:'id_aluno',label:'ID Aluno',type:'number'},{name:'id_turma',label:'ID Turma',type:'number'},{name:'data_matricula',label:'Data Matrícula',type:'date'} ] },
+        'avaliacoes': { label: 'Avaliações', fields: [ {name:'id_turma_disciplina',label:'ID TurmaDisc',type:'number'},{name:'descricao',label:'Descrição',type:'text'},{name:'data_avaliacao',label:'Data Avaliação',type:'date'},{name:'peso',label:'Peso',type:'number',step:'0.01'} ] },
+        'notas': { label: 'Notas', fields: [ {name:'id_avaliacao',label:'ID Avaliação',type:'number'},{name:'id_matricula',label:'ID Matrícula',type:'number'},{name:'nota',label:'Nota',type:'number',step:'0.01'} ] },
+        'frequencias': { label: 'Frequências', fields: [ {name:'id_matricula',label:'ID Matrícula',type:'number'},{name:'id_turma_disciplina',label:'ID TurmaDisc',type:'number'},{name:'data',label:'Data',type:'date'},{name:'status',label:'Status',type:'select',options:['PRESENTE','FALTA','JUSTIFICADO']} ] }
+      }
+
+      let apiBase = document.getElementById('apiBase').value.replace(/\/+$/,'')
+      const content = document.getElementById('content')
+      const menu = document.getElementById('menu')
+
+      function setApiClient(){
+        apiBase = document.getElementById('apiBase').value.replace(/\/+$/,'')
+        axios.defaults.baseURL = apiBase
+        toast('API base set to ' + apiBase)
+      }
+
+      document.getElementById('btnApplyBase').addEventListener('click', setApiClient)
+      axios.defaults.baseURL = apiBase
+
+      function toast(msg, error=false){
+        console.log(msg)
+        const el = document.createElement('div')
+        el.className = 'fixed bottom-4 right-4 bg-white border p-3 rounded shadow'
+        if(error) el.classList.add('text-red-600')
+        el.textContent = msg
+        document.body.appendChild(el)
+        setTimeout(()=> el.remove(), 4000)
+      }
+
+      function createMenu(){
+        Object.keys(ENTITIES).forEach(key=>{
+          const btn = document.createElement('button')
+          btn.className = 'w-full text-left px-3 py-2 rounded hover:bg-slate-100'
+          btn.textContent = ENTITIES[key].label
+          btn.addEventListener('click', ()=> openEntity(key))
+          menu.appendChild(btn)
+        })
+      }
+
+      async function openEntity(entity){
+        content.innerHTML = ''
+        const meta = ENTITIES[entity]
+        const header = document.createElement('div')
+        header.className = 'flex items-center justify-between mb-4'
+        const h = document.createElement('h2'); h.className='text-2xl font-semibold'; h.textContent = meta.label
+        const btn = document.createElement('button'); btn.className='px-3 py-1 bg-schoolGreen-500 text-white rounded'; btn.textContent='Novo'
+        btn.addEventListener('click', ()=> showForm(entity))
+        header.appendChild(h); header.appendChild(btn)
+        content.appendChild(header)
+
+        const listWrap = document.createElement('div'); listWrap.className='bg-white p-4 rounded shadow'; listWrap.id='list-wrap'; listWrap.textContent='Carregando...'
+        content.appendChild(listWrap)
+
+        try{
+          const res = await axios.get('/' + entity)
+          const items = Array.isArray(res.data) ? res.data : []
+          renderTable(entity, items)
+        }catch(err){
+          listWrap.textContent = 'Erro ao carregar — ver console';
+          toast('Erro: ' + (err.response? err.response.status + ' ' + err.response.statusText : err.message), true)
+        }
+      }
+
+      function renderTable(entity, items){
+        const wrap = document.getElementById('list-wrap')
+        wrap.innerHTML = ''
+        if(!items.length){ wrap.appendChild(document.createTextNode('Nenhum registro encontrado.')); return }
+
+        const keys = Object.keys(items[0])
+        const table = document.createElement('table'); table.className='w-full text-sm school-table'
+        const thead = document.createElement('thead'); const trh = document.createElement('tr'); trh.className='text-left border-b'
+        keys.forEach(k=>{ const th = document.createElement('th'); th.className='p-2'; th.textContent = k; trh.appendChild(th) })
+        const thActions = document.createElement('th'); thActions.className='p-2'; thActions.textContent='Ações'; trh.appendChild(thActions)
+        thead.appendChild(trh); table.appendChild(thead)
+
+        const tbody = document.createElement('tbody')
+        items.forEach(it=>{
+          const tr = document.createElement('tr'); tr.className='border-b hover:bg-slate-50'
+          keys.forEach(k=>{ const td=document.createElement('td'); td.className='p-2'; td.textContent = it[k] === null || it[k] === undefined ? '' : String(it[k]); tr.appendChild(td) })
+          const td = document.createElement('td'); td.className='p-2'
+          const ebtn = document.createElement('button'); ebtn.className='mr-2 text-indigo-600'; ebtn.textContent='Editar'; ebtn.addEventListener('click', ()=> showForm(entity, it))
+          const dbtn = document.createElement('button'); dbtn.className='text-red-600'; dbtn.textContent='Remover'; dbtn.addEventListener('click', ()=> removeItem(entity, it))
+          td.appendChild(ebtn); td.appendChild(dbtn); tr.appendChild(td)
+          tbody.appendChild(tr)
+        })
+        table.appendChild(tbody)
+        wrap.appendChild(table)
+      }
+
+      function buildField(meta, value){
+        const wrapper = document.createElement('div'); wrapper.className='flex flex-col'
+        const label = document.createElement('label'); label.className='text-xs text-slate-600 mb-1'; label.textContent = meta.label
+        let input
+        if(meta.type === 'select'){
+          input = document.createElement('select'); input.className='border rounded px-2 py-1'
+          meta.options.forEach(o=>{ const opt = document.createElement('option'); opt.value=o; opt.textContent=o; input.appendChild(opt) })
+          input.value = value || meta.options[0]
+        }else if(meta.type === 'checkbox'){
+          input = document.createElement('input'); input.type='checkbox'; input.className='h-4 w-4'
+          if(value===true || value===1 || value==='1' || value==='true') input.checked = true
+        }else{
+          input = document.createElement('input'); input.type = meta.type || 'text'; input.className='border rounded px-2 py-1'
+          if(meta.step) input.step = meta.step
+          input.value = value || ''
+        }
+        wrapper.appendChild(label); wrapper.appendChild(input)
+        return { wrapper, input }
+      }
+
+      function showForm(entity, editing){
+        // remove existing form
+        const existing = document.getElementById('form-area'); if(existing) existing.remove()
+        const meta = ENTITIES[entity]
+        const area = document.createElement('div'); area.id='form-area'; area.className='mt-6 bg-white p-4 rounded shadow'
+        const title = document.createElement('h3'); title.className='font-semibold'; title.textContent = (editing? 'Editar ' : 'Criar ') + meta.label
+        area.appendChild(title)
+        const grid = document.createElement('div'); grid.className='grid grid-cols-2 gap-3 mt-3'
+        const inputs = {}
+        meta.fields.forEach(f=>{
+          const {wrapper, input} = buildField(f, editing? (editing[f.name] ?? '') : '')
+          inputs[f.name] = input
+          grid.appendChild(wrapper)
+        })
+        area.appendChild(grid)
+        const btnSave = document.createElement('button'); btnSave.className='px-3 py-1 bg-schoolBlue-500 text-white rounded mr-2'; btnSave.textContent='Salvar'
+        btnSave.addEventListener('click', async ()=>{
+          const payload = {}
+          meta.fields.forEach(f=>{
+            const node = inputs[f.name]
+            payload[f.name] = (f.type === 'checkbox') ? Boolean(node.checked) : node.value
+          })
+          try{
+            if(editing){
+              // find id key
+              const idKey = Object.keys(editing).find(k=>k.startsWith('id_')) || 'id'
+              await axios.put('/' + entity + '/' + editing[idKey], payload)
+              toast('Atualizado com sucesso')
+            }else{
+              await axios.post('/' + entity, payload)
+              toast('Criado com sucesso')
+            }
+            // refresh list
+            const res = await axios.get('/' + entity)
+            renderTable(entity, Array.isArray(res.data)?res.data:[])
+            // remove form
+            area.remove()
+          }catch(err){ console.error(err); toast('Erro ao salvar: ' + (err.response? err.response.status : err.message), true) }
+        })
+        const btnCancel = document.createElement('button'); btnCancel.className='px-3 py-1 bg-slate-100 rounded'; btnCancel.textContent='Cancelar'; btnCancel.addEventListener('click', ()=> area.remove())
+        const actions = document.createElement('div'); actions.className='mt-3'; actions.appendChild(btnSave); actions.appendChild(btnCancel)
+        area.appendChild(actions)
+        content.appendChild(area)
+      }
+
+      async function removeItem(entity, item){
+        if(!confirm('Remover?')) return
+        const idKey = Object.keys(item).find(k=>k.startsWith('id_')) || 'id'
+        try{
+          await axios.delete('/' + entity + '/' + item[idKey])
+          toast('Removido')
+          const res = await axios.get('/' + entity)
+          renderTable(entity, Array.isArray(res.data)?res.data:[])
+        }catch(err){ console.error(err); toast('Erro ao remover', true) }
+      }
+
+      // init
+      createMenu()
+      // auto-open first
+      openEntity(Object.keys(ENTITIES)[0])
+    })()
+    </script>
+  </body>
+</html>
