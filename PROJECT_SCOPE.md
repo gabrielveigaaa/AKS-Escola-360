@@ -28,7 +28,7 @@ CRUD de alunos, turmas, disciplinas e vínculos; importação por planilha.
 ***Diário de Classe:***
 Lançamento de notas e presenças por bimestre/etapa com validações.
 
-***Boletim e Histórico PDF: ***
+***Boletim e Histórico PDF:***
 Geração automática de boletim e histórico assinado digitalmente com QR para 
 validação.
 
