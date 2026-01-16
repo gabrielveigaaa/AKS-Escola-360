@@ -10,6 +10,37 @@ const cors = require('cors');
 app.use(express.json());
 app.use(cors());
 
+// Request/response logger middleware for debugging
+app.use((req, res, next) => {
+	const start = Date.now()
+	try {
+		console.log(`[API] --> ${req.method} ${req.originalUrl} ${JSON.stringify(req.body || {})}`)
+	} catch (e) {
+		console.log(`[API] --> ${req.method} ${req.originalUrl}`)
+	}
+
+	const oldSend = res.send
+	let responseBody
+	res.send = function (body) {
+		responseBody = body
+		return oldSend.call(this, body)
+	}
+
+	res.on('finish', () => {
+		const dur = Date.now() - start
+		let respText = ''
+		try {
+			if (responseBody) {
+				if (typeof responseBody === 'object') respText = JSON.stringify(responseBody)
+				else respText = String(responseBody)
+			}
+		} catch (e) { respText = '[unserializable]' }
+		console.log(`[API] <-- ${req.method} ${req.originalUrl} ${res.statusCode} ${dur}ms ${respText}`)
+	})
+
+	next()
+})
+
 const db = require('./src/models');
 
 app.get('/', (req, res) => res.send('Escola360 API'));
