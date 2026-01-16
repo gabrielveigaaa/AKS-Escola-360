@@ -57,23 +57,29 @@
 
     <script>
     (function(){
+      // enhanced: fetchOptions for FK selects, filters and dynamic selects
       const ENTITIES = {
         'usuarios': { label: 'Usuários', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
         'perfis': { label: 'Perfis', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
-        'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'ID Usuário',type:'number'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
-        'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'ID Usuário',type:'number'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
+        'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
+        'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'Usuário',type:'hidden'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
         'turmas': { label: 'Turmas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'ano_letivo',label:'Ano Letivo',type:'number'},{name:'turno',label:'Turno',type:'select',options:['MANHA','TARDE','NOITE']},{name:'ativa',label:'Ativa',type:'checkbox'} ] },
         'disciplinas': { label: 'Disciplinas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'carga_horaria',label:'Carga Horária',type:'number'} ] },
-        'turma-disciplinas': { label: 'Turma-Disciplinas', fields: [ {name:'id_turma',label:'ID Turma',type:'number'},{name:'id_disciplina',label:'ID Disciplina',type:'number'},{name:'id_professor',label:'ID Professor',type:'number'} ] },
-        'matriculas': { label: 'Matrículas', fields: [ {name:'id_aluno',label:'ID Aluno',type:'number'},{name:'id_turma',label:'ID Turma',type:'number'},{name:'data_matricula',label:'Data Matrícula',type:'date'} ] },
-        'avaliacoes': { label: 'Avaliações', fields: [ {name:'id_turma_disciplina',label:'ID TurmaDisc',type:'number'},{name:'descricao',label:'Descrição',type:'text'},{name:'data_avaliacao',label:'Data Avaliação',type:'date'},{name:'peso',label:'Peso',type:'number',step:'0.01'} ] },
-        'notas': { label: 'Notas', fields: [ {name:'id_avaliacao',label:'ID Avaliação',type:'number'},{name:'id_matricula',label:'ID Matrícula',type:'number'},{name:'nota',label:'Nota',type:'number',step:'0.01'} ] },
-        'frequencias': { label: 'Frequências', fields: [ {name:'id_matricula',label:'ID Matrícula',type:'number'},{name:'id_turma_disciplina',label:'ID TurmaDisc',type:'number'},{name:'data',label:'Data',type:'date'},{name:'status',label:'Status',type:'select',options:['PRESENTE','FALTA','JUSTIFICADO']} ] }
+        // show turma name for id_turma and professor name for id_professor
+        'turma-disciplinas': { label: 'Turma-Disciplinas', fields: [ {name:'id_turma',label:'Turma',type:'select', source:'/turmas', valueKey:'id_turma', labelKey:'nome'},{name:'id_disciplina',label:'Disciplina',type:'select', source:'/disciplinas', valueKey:'id_disciplina', labelKey:'nome'},{name:'id_professor',label:'Professor',type:'select', source:'/professores', valueKey:'id_professor', labelKey:'_professor_nome'} ] },
+        // show aluno name instead of cpf in matricula selectors
+        'matriculas': { label: 'Matrículas', fields: [ {name:'id_aluno',label:'Aluno',type:'select', source:'/alunos', valueKey:'id_aluno', labelKey:'_aluno_nome'},{name:'id_turma',label:'Turma',type:'select', source:'/turmas', valueKey:'id_turma', labelKey:'nome'},{name:'data_matricula',label:'Data Matrícula',type:'date'} ] },
+        // show turma (name) for turma-disciplina selection
+        'avaliacoes': { label: 'Avaliações', fields: [ {name:'id_turma_disciplina',label:'Turma',type:'select', source:'/turma-disciplinas', valueKey:'id_turma_disciplina', labelKey:'_turma_nome'},{name:'descricao',label:'Descrição',type:'text'},{name:'data_avaliacao',label:'Data Avaliação',type:'date'},{name:'peso',label:'Peso',type:'number',step:'0.01'} ] },
+        // show aluno name instead of matricula id
+        'notas': { label: 'Notas', fields: [ {name:'id_avaliacao',label:'Avaliação',type:'select', source:'/avaliacoes', valueKey:'id_avaliacao', labelKey:'descricao'},{name:'id_matricula',label:'Nome do Aluno',type:'select', source:'/matriculas', valueKey:'id_matricula', labelKey:'_aluno_nome'},{name:'nota',label:'Nota',type:'number',step:'0.01'} ] },
+        'frequencias': { label: 'Frequências', fields: [ {name:'id_matricula',label:'Matrícula',type:'select', source:'/matriculas', valueKey:'id_matricula', labelKey:'_aluno_nome'},{name:'id_turma_disciplina',label:'TurmaDisc',type:'select', source:'/turma-disciplinas', valueKey:'id_turma_disciplina', labelKey:'_turma_disciplina'},{name:'data',label:'Data',type:'date'},{name:'status',label:'Status',type:'select',options:['PRESENTE','FALTA','JUSTIFICADO']} ] }
       }
 
       let apiBase = document.getElementById('apiBase').value.replace(/\/+$/,'')
       const content = document.getElementById('content')
       const menu = document.getElementById('menu')
+      const OPTIONS_CACHE = {}
 
       function setApiClient(){
         apiBase = document.getElementById('apiBase').value.replace(/\/+$/,'')
@@ -92,6 +98,85 @@
         el.textContent = msg
         document.body.appendChild(el)
         setTimeout(()=> el.remove(), 4000)
+      }
+
+      async function fetchOptions(source, valueKey='id', labelKey){
+        if(!source) return []
+        if(OPTIONS_CACHE[source]) return OPTIONS_CACHE[source]
+        try{
+          const res = await axios.get(source)
+          const items = Array.isArray(res.data)? res.data : []
+
+          // helpers to bulk-fetch related entities
+          const fetchAll = async (path)=>{
+            try{ const r = await axios.get(path); return Array.isArray(r.data)? r.data : [] }catch(e){ return [] }
+          }
+
+          let opts = []
+          // special cases to build friendly labels without changing the API
+          if(source === '/alunos'){
+            const users = await fetchAll('/usuarios')
+            const uMap = {};
+            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            opts = items.map(it=>{
+              const val = it[valueKey] ?? it.id_aluno
+              const label = uMap[it.id_usuario] || it.cpf || String(val)
+              return { value: val, label }
+            })
+          } else if(source === '/professores'){
+            const users = await fetchAll('/usuarios')
+            const uMap = {};
+            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            opts = items.map(it=>{
+              const val = it[valueKey] ?? it.id_professor
+              const label = uMap[it.id_usuario] || it.cpf || String(val)
+              return { value: val, label }
+            })
+          } else if(source === '/turma-disciplinas'){
+            const turmas = await fetchAll('/turmas')
+            const disciplinas = await fetchAll('/disciplinas')
+            const tMap = {}
+            turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            const dMap = {}
+            disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            opts = items.map(it=>{
+              const val = it[valueKey] ?? it.id_turma_disciplina
+              const turmaNome = tMap[it.id_turma]
+              const discNome = dMap[it.id_disciplina]
+              const label = (turmaNome && discNome) ? (turmaNome + ' — ' + discNome) : (turmaNome || discNome || String(val))
+              return { value: val, label }
+            })
+          } else if(source === '/matriculas'){
+            const alunos = await fetchAll('/alunos')
+            const users = await fetchAll('/usuarios')
+            const aMap = {}
+            alunos.forEach(a=> aMap[a.id_aluno] = a)
+            const uMap = {}
+            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            opts = items.map(it=>{
+              const val = it[valueKey] ?? it.id_matricula
+              const aluno = aMap[it.id_aluno]
+              const label = aluno ? (uMap[aluno.id_usuario] || aluno.cpf) : String(val)
+              return { value: val, label }
+            })
+          } else {
+            // default behavior
+            opts = items.map(it => {
+              const val = it[valueKey] ?? it.id ?? Object.values(it)[0]
+              let label = ''
+              if(labelKey && it[labelKey]) label = String(it[labelKey])
+              else {
+                const common = ['nome','descricao','email','cpf']
+                const found = common.find(k=> it[k])
+                label = found ? String(it[found]) : String(val)
+              }
+              return { value: val, label }
+            })
+          }
+
+          OPTIONS_CACHE[source] = opts
+          return opts
+        }catch(e){ console.error('fetchOptions', source, e); return [] }
       }
 
       function createMenu(){
@@ -115,15 +200,282 @@
         header.appendChild(h); header.appendChild(btn)
         content.appendChild(header)
 
+        // filters (some entities may show a custom filter input)
+        const filters = {}
+        if(entity === 'notas'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome do aluno'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
+        if(entity === 'matriculas'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome do aluno'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
+        if(entity === 'avaliacoes'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome da avaliação'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.descricao = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
+        if(entity === 'alunos'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome do aluno'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
+        if(entity === 'turma-disciplinas'){
+          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
+          // turma filter
+          const turmaSel = document.createElement('select'); turmaSel.className='border rounded px-2 py-1 text-sm'
+          turmaSel.appendChild(new Option('Todos', ''))
+          const turmaOpts = await fetchOptions('/turmas','id_turma','nome')
+          turmaOpts.forEach(o=> turmaSel.appendChild(new Option(o.label, o.value)))
+          turmaSel.addEventListener('change', ()=>{ filters.id_turma = turmaSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(turmaSel)
+          // disciplina filter
+          const discSel = document.createElement('select'); discSel.className='border rounded px-2 py-1 text-sm'
+          discSel.appendChild(new Option('Todos', ''))
+          const discOpts = await fetchOptions('/disciplinas','id_disciplina','nome')
+          discOpts.forEach(o=> discSel.appendChild(new Option(o.label, o.value)))
+          discSel.addEventListener('change', ()=>{ filters.id_disciplina = discSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(discSel)
+          // professor filter
+          const profSel = document.createElement('select'); profSel.className='border rounded px-2 py-1 text-sm'
+          profSel.appendChild(new Option('Todos', ''))
+          const profOpts = await fetchOptions('/professores','id_professor')
+          profOpts.forEach(o=> profSel.appendChild(new Option(o.label, o.value)))
+          profSel.addEventListener('change', ()=>{ filters.id_professor = profSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(profSel)
+          content.appendChild(toolbar)
+        }
+        if(entity === 'turmas'){
+          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
+          const nameInp = document.createElement('input'); nameInp.className='border rounded px-2 py-1 text-sm w-64'; nameInp.placeholder = 'Filtrar por nome da turma'
+          const anoSel = document.createElement('select'); anoSel.className='border rounded px-2 py-1 text-sm'
+          anoSel.appendChild(new Option('Todos anos', ''))
+          // populate years from turmas (client-side)
+          try{
+            const turmasAll = await fetchOptions('/turmas','id_turma','nome')
+            // attempt to fetch raw turmas to extract years
+            const raw = await axios.get('/turmas')
+            const yrs = Array.from(new Set((Array.isArray(raw.data)? raw.data : []).map(t=> t.ano_letivo).filter(Boolean))).sort()
+            yrs.forEach(y=> anoSel.appendChild(new Option(y, y)))
+          }catch(e){ /* ignore */ }
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          nameInp.addEventListener('input', debounce(()=>{ filters.turma_name = nameInp.value || undefined; loadAndRender(entity, filters) }))
+          anoSel.addEventListener('change', ()=>{ filters.ano_letivo = anoSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(nameInp); toolbar.appendChild(anoSel)
+          content.appendChild(toolbar)
+        }
+        if(entity === 'disciplinas'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome da disciplina'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
+        if(entity === 'frequencias'){
+          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
+          const tdSel = document.createElement('select'); tdSel.className='border rounded px-2 py-1 text-sm'
+          tdSel.appendChild(new Option('Todas turmas/disciplinas', ''))
+          const tdOpts = await fetchOptions('/turma-disciplinas','id_turma_disciplina')
+          tdOpts.forEach(o=> tdSel.appendChild(new Option(o.label, o.value)))
+          tdSel.addEventListener('change', ()=>{ filters.id_turma_disciplina = tdSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(tdSel)
+          content.appendChild(toolbar)
+        }
+        if(entity === 'professores'){
+          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
+          // professor name filter
+          const pInp = document.createElement('input'); pInp.className='border rounded px-2 py-1 text-sm w-64'; pInp.placeholder = 'Filtrar por nome do professor'
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          pInp.addEventListener('input', debounce(()=>{ filters.professor_name = pInp.value || undefined; loadAndRender(entity, filters) }))
+          toolbar.appendChild(pInp)
+          // disciplina filter
+          const discSel = document.createElement('select'); discSel.className='border rounded px-2 py-1 text-sm'
+          discSel.appendChild(new Option('Todas disciplinas', ''))
+          const discOpts = await fetchOptions('/disciplinas','id_disciplina','nome')
+          discOpts.forEach(o=> discSel.appendChild(new Option(o.label, o.value)))
+          discSel.addEventListener('change', ()=>{ filters.disciplina_id = discSel.value || undefined; loadAndRender(entity, filters) })
+          toolbar.appendChild(discSel)
+          content.appendChild(toolbar)
+        }
+
         const listWrap = document.createElement('div'); listWrap.className='bg-white p-4 rounded shadow'; listWrap.id='list-wrap'; listWrap.textContent='Carregando...'
         content.appendChild(listWrap)
 
+        await loadAndRender(entity, filters)
+      }
+
+      async function loadAndRender(entity, filters={}){
+        const wrap = document.getElementById('list-wrap')
+        if(!wrap) return
+        wrap.innerHTML = 'Carregando...'
         try{
-          const res = await axios.get('/' + entity)
-          const items = Array.isArray(res.data) ? res.data : []
+          const res = await axios.get('/' + entity, { params: filters })
+          let items = Array.isArray(res.data) ? res.data : []
+          // client-side enrichment and filtering for notas
+          if(entity === 'notas'){
+            const [mRes, aRes, uRes, avRes] = await Promise.all([axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios'), axios.get('/avaliacoes')])
+            const matriculas = Array.isArray(mRes.data)? mRes.data : []
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const avals = Array.isArray(avRes.data)? avRes.data : []
+            const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
+            const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const avMap = {}; avals.forEach(av=> avMap[av.id_avaliacao] = av.descricao)
+            items = items.map(it => {
+              const mat = mMap[it.id_matricula]
+              const aluno = mat? aMap[mat.id_aluno] : null
+              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              return Object.assign({}, it, { _aluno_nome: nome, _avaliacao_desc: avMap[it.id_avaliacao] || it.id_avaliacao })
+            })
+            if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._aluno_nome||'').toLowerCase().includes(q)) }
+          }
+            // client-side enrichment for alunos: resolve usuario name into _nome
+            if(entity === 'alunos'){
+              try{
+                const uRes = await axios.get('/usuarios')
+                const users = Array.isArray(uRes.data)? uRes.data : []
+                const uMap = {}
+                users.forEach(u=> uMap[u.id_usuario] = u.nome)
+                items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '' }))
+                if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
+              }catch(e){ console.error('alunos enrichment', e) }
+            }
+          // client-side enrichment for matriculas: resolve aluno name and turma name
+          if(entity === 'matriculas'){
+            const [aRes, uRes, tRes] = await Promise.all([axios.get('/alunos'), axios.get('/usuarios'), axios.get('/turmas')])
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const turmas = Array.isArray(tRes.data)? tRes.data : []
+            const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            items = items.map(it => {
+              const aluno = aMap[it.id_aluno]
+              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              const turmaNome = tMap[it.id_turma] || ''
+              return Object.assign({}, it, { _aluno_nome: nome, _turma_nome: turmaNome })
+            })
+            if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._aluno_nome||'').toLowerCase().includes(q)) }
+          }
+          // client-side enrichment and filtering for turma-disciplinas
+          if(entity === 'turma-disciplinas'){
+            const [tRes, dRes, pRes, uRes] = await Promise.all([axios.get('/turmas'), axios.get('/disciplinas'), axios.get('/professores'), axios.get('/usuarios')])
+            const turmas = Array.isArray(tRes.data)? tRes.data : []
+            const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+            const profs = Array.isArray(pRes.data)? pRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            const pMap = {}
+            profs.forEach(p=>{ const u = users.find(x=> x.id_usuario === p.id_usuario); pMap[p.id_professor] = (u? u.nome : p.cpf) })
+            items = items.map(it => Object.assign({}, it, { _turma_nome: tMap[it.id_turma] || '', _disciplina_nome: dMap[it.id_disciplina] || '', _professor_nome: pMap[it.id_professor] || '' }))
+            if(filters.id_turma) items = items.filter(i=> String(i.id_turma) === String(filters.id_turma))
+            if(filters.id_disciplina) items = items.filter(i=> String(i.id_disciplina) === String(filters.id_disciplina))
+            if(filters.id_professor) items = items.filter(i=> String(i.id_professor) === String(filters.id_professor))
+          }
+          // client-side enrichment and filtering for professores
+          if(entity === 'professores'){
+            const [uRes, tdRes, tRes, dRes] = await Promise.all([axios.get('/usuarios'), axios.get('/turma-disciplinas'), axios.get('/turmas'), axios.get('/disciplinas')])
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const tds = Array.isArray(tdRes.data)? tdRes.data : []
+            const turmas = Array.isArray(tRes.data)? tRes.data : []
+            const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            // build assignments per professor
+            const assignments = {}
+            tds.forEach(td=>{
+              const profId = td.id_professor
+              if(!assignments[profId]) assignments[profId] = []
+              const tName = tMap[td.id_turma] || ''
+              const dName = dMap[td.id_disciplina] || ''
+              assignments[profId].push({ id_td: td.id_turma_disciplina, turma: tName, disciplina: dName, id_disciplina: td.id_disciplina })
+            })
+            items = items.map(it=>{
+              const nome = uMap[it.id_usuario] || ''
+              const aulas = (assignments[it.id_professor] || []).map(a=> (a.turma && a.disciplina) ? (a.turma + ' — ' + a.disciplina) : (a.turma || a.disciplina)).join('; ')
+              const disciplinasIds = (assignments[it.id_professor] || []).map(a=> a.id_disciplina)
+              return Object.assign({}, it, { _nome: nome, _aulas: aulas, _disciplinas_ids: disciplinasIds })
+            })
+            if(filters.professor_name) { const q = String(filters.professor_name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
+            if(filters.disciplina_id) { items = items.filter(i=> (i._disciplinas_ids||[]).some(id=> String(id) === String(filters.disciplina_id))) }
+          }
+          // client-side filtering for disciplinas
+          if(entity === 'disciplinas'){
+            if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i.nome||'').toLowerCase().includes(q)) }
+          }
+          // client-side enrichment and filtering for avaliacoes
+          if(entity === 'avaliacoes'){
+            try{
+              const [tdRes, tRes, dRes] = await Promise.all([axios.get('/turma-disciplinas'), axios.get('/turmas'), axios.get('/disciplinas')])
+              const tds = Array.isArray(tdRes.data)? tdRes.data : []
+              const turmas = Array.isArray(tRes.data)? tRes.data : []
+              const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+              const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+              const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+              const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+              items = items.map(it => {
+                const td = tdMap[it.id_turma_disciplina]
+                const turmaNome = td? tMap[td.id_turma] : ''
+                const discNome = td? dMap[td.id_disciplina] : ''
+                const tdLabel = (turmaNome && discNome) ? (turmaNome + ' — ' + discNome) : (turmaNome || discNome || it.id_turma_disciplina)
+                return Object.assign({}, it, { _turma_disciplina_label: tdLabel })
+              })
+              if(filters.descricao){ const q = String(filters.descricao).toLowerCase(); items = items.filter(i=> (i.descricao||'').toLowerCase().includes(q)) }
+            }catch(e){ console.error('avaliacoes enrichment', e) }
+          }
+          // client-side filtering for turmas
+          if(entity === 'turmas'){
+            if(filters.turma_name){ const q = String(filters.turma_name).toLowerCase(); items = items.filter(i=> (i.nome||'').toLowerCase().includes(q)) }
+            if(filters.ano_letivo){ items = items.filter(i=> String(i.ano_letivo) === String(filters.ano_letivo)) }
+          }
+          // client-side enrichment and filtering for frequencias
+          if(entity === 'frequencias'){
+            const [mRes, aRes, uRes, tdRes, tRes, dRes] = await Promise.all([axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios'), axios.get('/turma-disciplinas'), axios.get('/turmas'), axios.get('/disciplinas')])
+            const matriculas = Array.isArray(mRes.data)? mRes.data : []
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const tds = Array.isArray(tdRes.data)? tdRes.data : []
+            const turmas = Array.isArray(tRes.data)? tRes.data : []
+            const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+            const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
+            const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+            const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            items = items.map(it => {
+              const mat = mMap[it.id_matricula]
+              const aluno = mat? aMap[mat.id_aluno] : null
+              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              const td = tdMap[it.id_turma_disciplina]
+              const turmaNome = td? (tMap[td.id_turma] || '') : ''
+              const discNome = td? (dMap[td.id_disciplina] || '') : ''
+              const tdLabel = turmaNome && discNome ? (turmaNome + ' — ' + discNome) : (turmaNome || discNome || it.id_turma_disciplina)
+              return Object.assign({}, it, { _aluno_nome: nome, _turma_disciplina_label: tdLabel })
+            })
+            if(filters.id_turma_disciplina) items = items.filter(i=> String(i.id_turma_disciplina) === String(filters.id_turma_disciplina))
+          }
           renderTable(entity, items)
         }catch(err){
-          listWrap.textContent = 'Erro ao carregar — ver console';
+          wrap.textContent = 'Erro ao carregar — ver console'
           toast('Erro: ' + (err.response? err.response.status + ' ' + err.response.statusText : err.message), true)
         }
       }
@@ -133,17 +485,114 @@
         wrap.innerHTML = ''
         if(!items.length){ wrap.appendChild(document.createTextNode('Nenhum registro encontrado.')); return }
 
-        const keys = Object.keys(items[0])
+        // custom columns: notas and turma-disciplinas have special views
+        let keys = Object.keys(items[0])
+        if(entity === 'notas'){
+          keys = ['id_nota','id_avaliacao','_aluno_nome','nota']
+        }
+        if(entity === 'turma-disciplinas'){
+          keys = ['_turma_nome','_disciplina_nome','_professor_nome']
+        }
+        if(entity === 'frequencias'){
+          keys = ['_turma_disciplina_label','_aluno_nome','data','status']
+        }
+        if(entity === 'avaliacoes'){
+          keys = ['descricao','_turma_disciplina_label','data_avaliacao','peso']
+        }
+        if(entity === 'matriculas'){
+          keys = ['_aluno_nome','_turma_nome','data_matricula']
+        }
+        if(entity === 'alunos'){
+          keys = ['_nome','cpf','data_nascimento']
+        }
+        if(entity === 'professores'){
+          keys = ['_nome','_aulas','cpf','data_admissao']
+        }
+        if(entity === 'disciplinas'){
+          keys = ['nome','carga_horaria']
+        }
+        if(entity === 'turmas'){
+          keys = ['nome','ano_letivo','turno','ativa']
+        }
         const table = document.createElement('table'); table.className='w-full text-sm school-table'
         const thead = document.createElement('thead'); const trh = document.createElement('tr'); trh.className='text-left border-b'
-        keys.forEach(k=>{ const th = document.createElement('th'); th.className='p-2'; th.textContent = k; trh.appendChild(th) })
+        keys.forEach(k=>{ const th = document.createElement('th'); th.className='p-2';
+          let title = k
+          if(entity === 'notas' && k === 'id_avaliacao') title = 'Avaliação'
+          if(entity === 'notas' && k === '_aluno_nome') title = 'Nome do Aluno'
+          if(entity === 'turma-disciplinas' && k === '_turma_nome') title = 'Turma'
+          if(entity === 'turma-disciplinas' && k === '_disciplina_nome') title = 'Disciplina'
+          if(entity === 'turma-disciplinas' && k === '_professor_nome') title = 'Professor'
+          if(entity === 'matriculas' && k === '_aluno_nome') title = 'Aluno'
+          if(entity === 'matriculas' && k === '_turma_nome') title = 'Turma'
+          if(entity === 'matriculas' && k === 'data_matricula') title = 'Data Matrícula'
+          if(entity === 'frequencias' && k === '_turma_disciplina_label') title = 'Turma — Disciplina'
+          if(entity === 'frequencias' && k === '_aluno_nome') title = 'Aluno'
+          if(entity === 'frequencias' && k === 'data') title = 'Data'
+          if(entity === 'frequencias' && k === 'status') title = 'Status'
+          if(entity === 'avaliacoes' && k === 'descricao') title = 'Descrição'
+          if(entity === 'avaliacoes' && k === '_turma_disciplina_label') title = 'Turma — Disciplina'
+          if(entity === 'avaliacoes' && k === 'data_avaliacao') title = 'Data Avaliação'
+          if(entity === 'avaliacoes' && k === 'peso') title = 'Peso'
+          if(entity === 'alunos' && k === '_nome') title = 'Nome'
+          if(entity === 'alunos' && k === 'cpf') title = 'CPF'
+          if(entity === 'alunos' && k === 'data_nascimento') title = 'Data Nasc.'
+          if(entity === 'professores' && k === '_nome') title = 'Nome'
+          if(entity === 'professores' && k === '_aulas') title = 'Turmas/Disciplinas'
+          if(entity === 'professores' && k === 'cpf') title = 'CPF'
+          if(entity === 'professores' && k === 'data_admissao') title = 'Data Admissão'
+          if(entity === 'disciplinas' && k === 'nome') title = 'Nome'
+          if(entity === 'disciplinas' && k === 'carga_horaria') title = 'Carga Horária'
+          if(entity === 'turmas' && k === 'nome') title = 'Nome'
+          if(entity === 'turmas' && k === 'ano_letivo') title = 'Ano Letivo'
+          if(entity === 'turmas' && k === 'turno') title = 'Turno'
+          if(entity === 'turmas' && k === 'ativa') title = 'Ativa'
+          th.textContent = title; trh.appendChild(th)
+        })
         const thActions = document.createElement('th'); thActions.className='p-2'; thActions.textContent='Ações'; trh.appendChild(thActions)
         thead.appendChild(trh); table.appendChild(thead)
 
         const tbody = document.createElement('tbody')
         items.forEach(it=>{
           const tr = document.createElement('tr'); tr.className='border-b hover:bg-slate-50'
-          keys.forEach(k=>{ const td=document.createElement('td'); td.className='p-2'; td.textContent = it[k] === null || it[k] === undefined ? '' : String(it[k]); tr.appendChild(td) })
+          keys.forEach(k=>{
+            const td=document.createElement('td'); td.className='p-2'
+            let text = ''
+            if(entity === 'notas'){
+              if(k === 'id_avaliacao') text = it._avaliacao_desc || ''
+              else if(k === '_aluno_nome') text = it._aluno_nome || ''
+              else text = (it[k] === null || it[k] === undefined) ? '' : String(it[k])
+            } else if(entity === 'turma-disciplinas'){
+              if(k === '_turma_nome') text = it._turma_nome || ''
+              else if(k === '_disciplina_nome') text = it._disciplina_nome || ''
+              else if(k === '_professor_nome') text = it._professor_nome || ''
+            } else if(entity === 'matriculas'){
+              if(k === '_aluno_nome') text = it._aluno_nome || ''
+              else if(k === '_turma_nome') text = it._turma_nome || ''
+              else if(k === 'data_matricula') text = it.data_matricula || ''
+            } else if(entity === 'frequencias'){
+              if(k === '_turma_disciplina_label') text = it._turma_disciplina_label || ''
+              else if(k === '_aluno_nome') text = it._aluno_nome || ''
+              else if(k === 'data') text = it.data || ''
+              else if(k === 'status') text = it.status || ''
+            } else if(entity === 'professores'){
+              if(k === '_nome') text = it._nome || ''
+              else if(k === '_aulas') text = it._aulas || ''
+              else if(k === 'cpf') text = it.cpf || ''
+              else if(k === 'data_admissao') text = it.data_admissao || ''
+            } else if(entity === 'alunos'){
+              if(k === '_nome') text = it._nome || ''
+              else if(k === 'cpf') text = it.cpf || ''
+              else if(k === 'data_nascimento') text = it.data_nascimento || ''
+            } else if(entity === 'disciplinas'){
+              if(k === 'nome') text = it.nome || ''
+              else if(k === 'carga_horaria') text = (it.carga_horaria === null || it.carga_horaria === undefined) ? '' : String(it.carga_horaria)
+            } else {
+              text = (it[k] === null || it[k] === undefined) ? '' : String(it[k])
+            }
+            td.textContent = text
+            tr.appendChild(td)
+          })
           const td = document.createElement('td'); td.className='p-2'
           const ebtn = document.createElement('button'); ebtn.className='mr-2 text-indigo-600'; ebtn.textContent='Editar'; ebtn.addEventListener('click', ()=> showForm(entity, it))
           const dbtn = document.createElement('button'); dbtn.className='text-red-600'; dbtn.textContent='Remover'; dbtn.addEventListener('click', ()=> removeItem(entity, it))
@@ -156,12 +605,21 @@
 
       function buildField(meta, value){
         const wrapper = document.createElement('div'); wrapper.className='flex flex-col'
+        // hidden fields should not show label
+        if(meta.type === 'hidden'){
+          const input = document.createElement('input'); input.type = 'hidden'; input.value = value || ''
+          wrapper.style.display = 'none'
+          wrapper.appendChild(input)
+          return { wrapper, input }
+        }
         const label = document.createElement('label'); label.className='text-xs text-slate-600 mb-1'; label.textContent = meta.label
         let input
         if(meta.type === 'select'){
           input = document.createElement('select'); input.className='border rounded px-2 py-1'
-          meta.options.forEach(o=>{ const opt = document.createElement('option'); opt.value=o; opt.textContent=o; input.appendChild(opt) })
-          input.value = value || meta.options[0]
+          if(meta.options && meta.options.length){
+            meta.options.forEach(o=>{ const opt = document.createElement('option'); opt.value=o; opt.textContent=o; input.appendChild(opt) })
+            input.value = value || meta.options[0]
+          }
         }else if(meta.type === 'checkbox'){
           input = document.createElement('input'); input.type='checkbox'; input.className='h-4 w-4'
           if(value===true || value===1 || value==='1' || value==='true') input.checked = true
@@ -174,7 +632,7 @@
         return { wrapper, input }
       }
 
-      function showForm(entity, editing){
+      async function showForm(entity, editing){
         // remove existing form
         const existing = document.getElementById('form-area'); if(existing) existing.remove()
         const meta = ENTITIES[entity]
@@ -183,12 +641,121 @@
         area.appendChild(title)
         const grid = document.createElement('div'); grid.className='grid grid-cols-2 gap-3 mt-3'
         const inputs = {}
-        meta.fields.forEach(f=>{
-          const {wrapper, input} = buildField(f, editing? (editing[f.name] ?? '') : '')
+        // build fields (handle async option sources)
+        for(const f of meta.fields){
+          const { wrapper, input } = buildField(f, '')
           inputs[f.name] = input
           grid.appendChild(wrapper)
-        })
+        }
         area.appendChild(grid)
+
+        // special UX for `alunos`: show a disabled display input for usuário name
+        if(entity === 'alunos'){
+          const cpfNode = inputs['cpf']
+          const hiddenNode = inputs['id_usuario']
+          // create display input
+          const dispWrapper = document.createElement('div'); dispWrapper.className='flex flex-col'
+          const dispLabel = document.createElement('label'); dispLabel.className='text-xs text-slate-600 mb-1'; dispLabel.textContent = 'Usuário'
+          const dispInput = document.createElement('input'); dispInput.type = 'text'; dispInput.className = 'border rounded px-2 py-1 bg-slate-100'; dispInput.disabled = true
+          dispWrapper.appendChild(dispLabel); dispWrapper.appendChild(dispInput)
+          // insert the display input visually before the CPF field wrapper
+          let insertIndex = -1
+          for(let i=0;i<grid.children.length;i++){
+            const child = grid.children[i]
+            if(child.contains(cpfNode)) { insertIndex = i; break }
+          }
+          if(insertIndex >= 0) grid.insertBefore(dispWrapper, grid.children[insertIndex])
+
+          // lookup function: fetch lists and match cpf client-side
+          const lookupByCpf = async (cpf)=>{
+            const norm = (cpf||'').replace(/\D/g,'')
+            if(!norm){ hiddenNode.value = ''; dispInput.value = ''; return }
+            try{
+              const [alRes, profRes, usersRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores'), axios.get('/usuarios')])
+              const alunos = Array.isArray(alRes.data)? alRes.data : []
+              const profs = Array.isArray(profRes.data)? profRes.data : []
+              const users = Array.isArray(usersRes.data)? usersRes.data : []
+              const foundA = alunos.find(a=> (a.cpf||'') === norm)
+              if(foundA){
+                const user = users.find(u=> u.id_usuario === foundA.id_usuario)
+                hiddenNode.value = foundA.id_usuario || ''
+                dispInput.value = user? user.nome : (foundA.cpf || '')
+                return
+              }
+              const foundP = profs.find(p=> (p.cpf||'') === norm)
+              if(foundP){
+                const user = users.find(u=> u.id_usuario === foundP.id_usuario)
+                hiddenNode.value = foundP.id_usuario || ''
+                dispInput.value = user? user.nome : (foundP.cpf || '')
+                return
+              }
+              hiddenNode.value = ''
+              dispInput.value = ''
+            }catch(e){ console.error('lookupByCpf', e); hiddenNode.value=''; dispInput.value='' }
+          }
+
+          if(cpfNode){ cpfNode.addEventListener('blur', ()=> lookupByCpf(cpfNode.value || '')) }
+          // when editing, pre-fill display from editing values
+          if(editing){
+            if(editing.id_usuario){
+              try{ const ures = await axios.get('/usuarios'); const users = Array.isArray(ures.data)? ures.data : []; const user = users.find(u=> u.id_usuario === editing.id_usuario); if(user) dispInput.value = user.nome; hiddenNode.value = editing.id_usuario }
+              catch(e){ console.error(e) }
+            } else if(editing.cpf) {
+              await lookupByCpf(editing.cpf)
+            }
+          }
+        }
+
+        // populate selects that have source and set editing values
+        for(const f of meta.fields){
+          if(f.type === 'select' && f.source){
+            const opts = await fetchOptions(f.source, f.valueKey || f.name, f.labelKey)
+            const sel = inputs[f.name]
+            sel.innerHTML = ''
+            opts.forEach(o=> sel.appendChild(new Option(o.label, o.value)))
+            if(editing && editing[f.name] !== undefined) sel.value = editing[f.name]
+          } else {
+            if(editing && editing[f.name] !== undefined){
+              const node = inputs[f.name]
+              if(f.type === 'checkbox') node.checked = Boolean(editing[f.name])
+              else node.value = editing[f.name]
+            }
+          }
+        }
+
+        // dynamic behavior for frequencias form: when turma-disciplina changes, limit matricula options to that turma
+        if(entity === 'frequencias'){
+          try{
+            const tdSel = inputs['id_turma_disciplina']
+            const matSel = inputs['id_matricula']
+            const [tdRes, mRes, aRes, uRes] = await Promise.all([axios.get('/turma-disciplinas'), axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios')])
+            const tds = Array.isArray(tdRes.data)? tdRes.data : []
+            const mats = Array.isArray(mRes.data)? mRes.data : []
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const tdMap = {};
+            tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+            const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+
+            const rebuildMatOptions = (selectedTdId)=>{
+              matSel.innerHTML = ''
+              const filtered = selectedTdId ? mats.filter(m=> String(m.id_turma) === String(tdMap[selectedTdId].id_turma)) : mats
+              filtered.forEach(m=>{
+                const aluno = aMap[m.id_aluno]
+                const label = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : String(m.id_matricula)
+                matSel.appendChild(new Option(label, m.id_matricula))
+              })
+            }
+
+            // initial build (respect editing value)
+            rebuildMatOptions(tdSel.value || undefined)
+            if(editing && editing.id_matricula) matSel.value = editing.id_matricula
+
+            tdSel.addEventListener('change', ()=> rebuildMatOptions(tdSel.value || undefined))
+          }catch(e){ console.error('frequencias form dynamic', e) }
+        }
+
         const btnSave = document.createElement('button'); btnSave.className='px-3 py-1 bg-schoolBlue-500 text-white rounded mr-2'; btnSave.textContent='Salvar'
         btnSave.addEventListener('click', async ()=>{
           const payload = {}
@@ -207,8 +774,7 @@
               toast('Criado com sucesso')
             }
             // refresh list
-            const res = await axios.get('/' + entity)
-            renderTable(entity, Array.isArray(res.data)?res.data:[])
+            await loadAndRender(entity)
             // remove form
             area.remove()
           }catch(err){ console.error(err); toast('Erro ao salvar: ' + (err.response? err.response.status : err.message), true) }
@@ -225,8 +791,7 @@
         try{
           await axios.delete('/' + entity + '/' + item[idKey])
           toast('Removido')
-          const res = await axios.get('/' + entity)
-          renderTable(entity, Array.isArray(res.data)?res.data:[])
+          await loadAndRender(entity)
         }catch(err){ console.error(err); toast('Erro ao remover', true) }
       }
 
