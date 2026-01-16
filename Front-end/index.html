@@ -62,7 +62,7 @@
         'usuarios': { label: 'Usuários', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
         'perfis': { label: 'Perfis', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
         'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
-        'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'Usuário',type:'hidden'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
+        'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
         'turmas': { label: 'Turmas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'ano_letivo',label:'Ano Letivo',type:'number'},{name:'turno',label:'Turno',type:'select',options:['MANHA','TARDE','NOITE']},{name:'ativa',label:'Ativa',type:'checkbox'} ] },
         'disciplinas': { label: 'Disciplinas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'carga_horaria',label:'Carga Horária',type:'number'} ] },
         // show turma name for id_turma and professor name for id_professor
@@ -672,53 +672,36 @@
         if(entity === 'alunos'){
           const cpfNode = inputs['cpf']
           const hiddenNode = inputs['id_usuario']
-          // create display input
-          const dispWrapper = document.createElement('div'); dispWrapper.className='flex flex-col'
-          const dispLabel = document.createElement('label'); dispLabel.className='text-xs text-slate-600 mb-1'; dispLabel.textContent = 'Usuário'
-          const dispInput = document.createElement('input'); dispInput.type = 'text'; dispInput.className = 'border rounded px-2 py-1 bg-slate-100'; dispInput.disabled = true
-          dispWrapper.appendChild(dispLabel); dispWrapper.appendChild(dispInput)
-          // insert the display input visually before the CPF field wrapper
-          let insertIndex = -1
-          for(let i=0;i<grid.children.length;i++){
-            const child = grid.children[i]
-            if(child.contains(cpfNode)) { insertIndex = i; break }
-          }
-          if(insertIndex >= 0) grid.insertBefore(dispWrapper, grid.children[insertIndex])
-
-          // lookup function: fetch lists and match cpf client-side
+          // lookup function: fetch lists and match cpf client-side (sets id_usuario)
           const lookupByCpf = async (cpf)=>{
             const norm = (cpf||'').replace(/\D/g,'')
-            if(!norm){ hiddenNode.value = ''; dispInput.value = ''; return }
+            // if no cpf normalized, do not modify current select value — just clear any pending lookup
+            if(!norm){ delete hiddenNode.dataset.pending; return }
             try{
-              const [alRes, profRes, usersRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores'), axios.get('/usuarios')])
+              const [alRes, profRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores')])
               const alunos = Array.isArray(alRes.data)? alRes.data : []
               const profs = Array.isArray(profRes.data)? profRes.data : []
-              const users = Array.isArray(usersRes.data)? usersRes.data : []
               const foundA = alunos.find(a=> (a.cpf||'') === norm)
               if(foundA){
-                const user = users.find(u=> u.id_usuario === foundA.id_usuario)
-                hiddenNode.value = foundA.id_usuario || ''
-                dispInput.value = user? user.nome : (foundA.cpf || '')
+                hiddenNode.dataset.pending = String(foundA.id_usuario || '')
+                // do not assign hiddenNode.value now — wait until select options exist
                 return
               }
               const foundP = profs.find(p=> (p.cpf||'') === norm)
               if(foundP){
-                const user = users.find(u=> u.id_usuario === foundP.id_usuario)
-                hiddenNode.value = foundP.id_usuario || ''
-                dispInput.value = user? user.nome : (foundP.cpf || '')
+                hiddenNode.dataset.pending = String(foundP.id_usuario || '')
                 return
               }
-              hiddenNode.value = ''
-              dispInput.value = ''
-            }catch(e){ console.error('lookupByCpf', e); hiddenNode.value=''; dispInput.value='' }
+              // no match: remove pending but keep current selection unchanged
+              delete hiddenNode.dataset.pending
+            }catch(e){ console.error('lookupByCpf', e); delete hiddenNode.dataset.pending }
           }
 
           if(cpfNode){ cpfNode.addEventListener('blur', ()=> lookupByCpf(cpfNode.value || '')) }
-          // when editing, pre-fill display from editing values
+          // when editing, pre-fill id_usuario from editing values
           if(editing){
             if(editing.id_usuario){
-              try{ const ures = await axios.get('/usuarios'); const users = Array.isArray(ures.data)? ures.data : []; const user = users.find(u=> u.id_usuario === editing.id_usuario); if(user) dispInput.value = user.nome; hiddenNode.value = editing.id_usuario }
-              catch(e){ console.error(e) }
+              hiddenNode.value = editing.id_usuario
             } else if(editing.cpf) {
               await lookupByCpf(editing.cpf)
             }
@@ -732,13 +715,36 @@
             const sel = inputs[f.name]
             sel.innerHTML = ''
             opts.forEach(o=> sel.appendChild(new Option(o.label, o.value)))
-            if(editing && editing[f.name] !== undefined) sel.value = editing[f.name]
+            if(sel.dataset.pending){ sel.value = sel.dataset.pending; delete sel.dataset.pending }
+            else if(editing && editing[f.name] !== undefined) sel.value = editing[f.name]
           } else {
             if(editing && editing[f.name] !== undefined){
               const node = inputs[f.name]
               if(f.type === 'checkbox') node.checked = Boolean(editing[f.name])
               else node.value = editing[f.name]
             }
+          }
+        }
+
+        // For alunos: if a pending id was set before options existed, ensure it survives later input changes
+        if(entity === 'alunos'){
+          const userSel = inputs['id_usuario']
+          if(userSel){
+            Object.keys(inputs).forEach(k=>{
+              const node = inputs[k]
+              if(node && typeof node.addEventListener === 'function'){
+                node.addEventListener('change', ()=>{
+                  if(userSel.dataset && userSel.dataset.pending && (userSel.value === '' || userSel.value === undefined)){
+                    const pending = userSel.dataset.pending
+                    const hasOption = Array.from(userSel.options || []).some(o=> String(o.value) === String(pending))
+                    if(hasOption){
+                      try{ userSel.value = pending }catch(e){}
+                      delete userSel.dataset.pending
+                    }
+                  }
+                })
+              }
+            })
           }
         }
 
@@ -780,7 +786,13 @@
           const payload = {}
           meta.fields.forEach(f=>{
             const node = inputs[f.name]
-            payload[f.name] = (f.type === 'checkbox') ? Boolean(node.checked) : node.value
+            let val
+            if(f.type === 'checkbox') val = Boolean(node.checked)
+            else {
+              val = node.value
+              if((val === '' || val === undefined) && node && node.dataset && node.dataset.pending) val = node.dataset.pending
+            }
+            payload[f.name] = val
           })
           try{
             if(editing){
