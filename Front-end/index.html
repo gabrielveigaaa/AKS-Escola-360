@@ -234,6 +234,15 @@
           const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
           finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
         }
+
+        if(entity === 'usuarios'){
+          const fwrap = document.createElement('div'); fwrap.className='mb-3'
+          const finp = document.createElement('input'); finp.className='border rounded px-2 py-1 text-sm w-64'; finp.placeholder = 'Filtrar por nome do usuário'
+          fwrap.appendChild(finp)
+          content.appendChild(fwrap)
+          const debounce = (fn, wait=300)=>{ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), wait) }}
+          finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
+        }
         if(entity === 'turma-disciplinas'){
           const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
           // turma filter
@@ -355,6 +364,10 @@
                 items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '' }))
                 if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
               }catch(e){ console.error('alunos enrichment', e) }
+            }
+            // client-side filtering for usuarios (by nome)
+            if(entity === 'usuarios'){
+              if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i.nome||'').toLowerCase().includes(q)) }
             }
           // client-side enrichment for matriculas: resolve aluno name and turma name
           if(entity === 'matriculas'){
@@ -508,6 +521,9 @@
         if(entity === 'professores'){
           keys = ['_nome','_aulas','cpf','data_admissao']
         }
+        if(entity === 'usuarios'){
+          keys = ['nome','email','ativo']
+        }
         if(entity === 'disciplinas'){
           keys = ['nome','carga_horaria']
         }
@@ -547,6 +563,9 @@
           if(entity === 'turmas' && k === 'ano_letivo') title = 'Ano Letivo'
           if(entity === 'turmas' && k === 'turno') title = 'Turno'
           if(entity === 'turmas' && k === 'ativa') title = 'Ativa'
+          if(entity === 'usuarios' && k === 'nome') title = 'Nome'
+          if(entity === 'usuarios' && k === 'email') title = 'Email'
+          if(entity === 'usuarios' && k === 'ativo') title = 'Ativo'
           th.textContent = title; trh.appendChild(th)
         })
         const thActions = document.createElement('th'); thActions.className='p-2'; thActions.textContent='Ações'; trh.appendChild(thActions)
