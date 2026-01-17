@@ -292,7 +292,11 @@
           }catch(e){ console.error('add responsavel', e); toast('Erro ao adicionar responsável', true) }
         })
 
-        // attach responsaveis section (it will be hidden for professor via refreshTipo)
+        // attach responsaveis section (only visible for alunos)
+        try{
+          const currentTipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
+          responsaveisSection.style.display = currentTipo === 'aluno' ? '' : 'none'
+        }catch(e){}
         area.appendChild(responsaveisSection)
 
         // If editing, prefill fields (usuario, aluno/professor specific, endereco, responsaveis)
