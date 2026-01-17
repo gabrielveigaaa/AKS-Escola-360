@@ -51,6 +51,16 @@ async function start() {
 	try {
 		await db.sequelize.authenticate();
 		console.log('Database connected');
+
+		// Ensure required perfis exist
+		try{
+			const required = ['ADMIN','ALUNO','PROFESSOR','RESPONSAVEL','USUARIO']
+			if(db.Perfil){
+				for(const nome of required){
+					try{ await db.Perfil.findOrCreate({ where: { nome } }) }catch(e){ console.error('ensure perfil', nome, e) }
+				}
+			}
+		}catch(e){ console.error('error ensuring perfis', e) }
 		// Do not auto-sync production schema by default. Uncomment if you want sync.
 		// await db.sequelize.sync({ alter: false });
 		app.listen(port, () => console.log(`Server running on port ${port}`));
