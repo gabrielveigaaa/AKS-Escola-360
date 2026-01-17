@@ -2,21 +2,6 @@ CREATE DATABASE sistema_AKS;
 USE sistema_AKS;
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS tb_frequencias;
-DROP TABLE IF EXISTS tb_notas;
-DROP TABLE IF EXISTS tb_avaliacoes;
-DROP TABLE IF EXISTS tb_matriculas;
-DROP TABLE IF EXISTS tb_turma_disciplinas;
-DROP TABLE IF EXISTS tb_disciplinas;
-DROP TABLE IF EXISTS tb_turmas;
-DROP TABLE IF EXISTS tb_alunos;
-DROP TABLE IF EXISTS tb_professores;
-DROP TABLE IF EXISTS tb_usuario_perfis;
-DROP TABLE IF EXISTS tb_perfis;
-DROP TABLE IF EXISTS tb_usuarios;
-
-SET FOREIGN_KEY_CHECKS = 1;
-
 -- ======================
 -- USUÁRIOS
 -- ======================
@@ -27,8 +12,10 @@ CREATE TABLE tb_usuarios (
     email VARCHAR(150) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
     ativo BOOLEAN NOT NULL DEFAULT 1,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    rg VARCHAR(45) DEFAULT NULL,
+    cpf VARCHAR(11) DEFAULT NULL
+ ) ENGINE=InnoDB;
 
 -- ======================
 -- PERFIS
@@ -54,7 +41,6 @@ CREATE TABLE tb_usuario_perfis (
 CREATE TABLE tb_professores (
     id_professor INT AUTO_INCREMENT PRIMARY KEY,
     id_usuario INT NOT NULL UNIQUE,
-    cpf CHAR(11) NOT NULL UNIQUE,
     data_admissao DATE,
     FOREIGN KEY (id_usuario) REFERENCES tb_usuarios(id_usuario)
 ) ENGINE=InnoDB;
@@ -62,8 +48,10 @@ CREATE TABLE tb_professores (
 CREATE TABLE tb_alunos (
     id_aluno INT AUTO_INCREMENT PRIMARY KEY,
     id_usuario INT NOT NULL UNIQUE,
-    cpf CHAR(11) NOT NULL UNIQUE,
-    data_nascimento DATE,
+    data_nascimento DATE DEFAULT NULL,
+    nome_mae VARCHAR(100) DEFAULT NULL,
+    nome_pai VARCHAR(100) DEFAULT NULL,
+    sexo VARCHAR(45) DEFAULT NULL,
     FOREIGN KEY (id_usuario) REFERENCES tb_usuarios(id_usuario)
 ) ENGINE=InnoDB;
 
@@ -92,6 +80,7 @@ CREATE TABLE tb_endereco (
 CREATE TABLE tb_responsaveis (
     tb_alunos_id_aluno INT NOT NULL,
     tb_usuarios_id_usuario INT NOT NULL,
+    cpf VARCHAR(11) DEFAULT NULL,
     PRIMARY KEY (tb_alunos_id_aluno, tb_usuarios_id_usuario),
     INDEX fk_tb_alunos_has_tb_usuarios_tb_usuarios1_idx (tb_usuarios_id_usuario),
     INDEX fk_tb_alunos_has_tb_usuarios_tb_alunos1_idx (tb_alunos_id_aluno),

@@ -5,7 +5,9 @@ module.exports = (sequelize, DataTypes) => {
     email: { type: DataTypes.STRING(150), allowNull: false, unique: true },
     senha_hash: { type: DataTypes.STRING(255), allowNull: false },
     ativo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
-    criado_em: { type: DataTypes.DATE, allowNull: true }
+    criado_em: { type: DataTypes.DATE, allowNull: true },
+    rg: { type: DataTypes.STRING(45), allowNull: true },
+    cpf: { type: DataTypes.STRING(11), allowNull: true }
   }, {
     tableName: 'tb_usuarios',
     timestamps: false
