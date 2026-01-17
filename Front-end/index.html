@@ -26,6 +26,450 @@
           }
         }
       }
+
+      function toast(msg, error=false){
+        if(!document.body){ return setTimeout(()=> toast(msg,error), 100) }
+        console.log(msg)
+        const el = document.createElement('div')
+        el.className = 'fixed bottom-4 right-4 bg-white border p-3 rounded shadow'
+        if(error) el.classList.add('text-red-600')
+        el.textContent = msg
+        document.body.appendChild(el)
+        setTimeout(()=> el.remove(), 4000)
+      }
+
+      async function safeLoadAndRender(entity, filters={}){
+        try{ if(typeof loadAndRender === 'function') return await loadAndRender(entity, filters) }catch(e){}
+      }
+
+      async function showUnifiedForm(opts={}){
+        // remove existing form
+        const existing = document.getElementById('form-area'); if(existing) existing.remove()
+        const area = document.createElement('div'); area.id='form-area'; area.className='mt-6 bg-white p-4 rounded shadow'
+        const title = document.createElement('h3'); title.className='font-semibold'; title.textContent = 'DADOS PESSOAIS E ENDEREÇO'
+        area.appendChild(title)
+
+        const grid = document.createElement('div'); grid.className='grid grid-cols-2 gap-3 mt-3'
+
+        // Tipo: aluno ou professor (quando aplicável)
+        const tipoWrap = document.createElement('div'); tipoWrap.className='flex flex-col'
+        const tipoLabel = document.createElement('label'); tipoLabel.className='text-xs text-slate-600 mb-1'; tipoLabel.textContent='Tipo'
+        const tipoSel = document.createElement('select'); tipoSel.className='border rounded px-2 py-1'; tipoSel.id='un_tipo'
+        tipoSel.appendChild(new Option('Aluno','aluno'))
+        tipoSel.appendChild(new Option('Professor','professor'))
+        // if opts.tipo is provided and is one of the selectable values, pre-select it
+        if(opts && (opts.tipo === 'aluno' || opts.tipo === 'professor')){ try{ tipoSel.value = opts.tipo }catch(e){} }
+        // hide tipo selector only when opening specifically for 'usuario'
+        if(opts && opts.tipo === 'usuario') tipoWrap.style.display = 'none'
+        tipoWrap.appendChild(tipoLabel); tipoWrap.appendChild(tipoSel); grid.appendChild(tipoWrap)
+
+        // Usuario fields
+        const nomeWrap = document.createElement('div'); nomeWrap.className='flex flex-col'
+        const nomeLabel = document.createElement('label'); nomeLabel.className='text-xs text-slate-600 mb-1'; nomeLabel.textContent='Nome'
+        const nomeInp = document.createElement('input'); nomeInp.className='border rounded px-2 py-1'; nomeInp.id='un_nome'
+        nomeWrap.appendChild(nomeLabel); nomeWrap.appendChild(nomeInp); grid.appendChild(nomeWrap)
+
+        const emailWrap = document.createElement('div'); emailWrap.className='flex flex-col'
+        const emailLabel = document.createElement('label'); emailLabel.className='text-xs text-slate-600 mb-1'; emailLabel.textContent='Email'
+        const emailInp = document.createElement('input'); emailInp.type='email'; emailInp.className='border rounded px-2 py-1'; emailInp.id='un_email'
+        emailWrap.appendChild(emailLabel); emailWrap.appendChild(emailInp); grid.appendChild(emailWrap)
+
+        const senhaWrap = document.createElement('div'); senhaWrap.className='flex flex-col'
+        const senhaLabel = document.createElement('label'); senhaLabel.className='text-xs text-slate-600 mb-1'; senhaLabel.textContent='Senha'
+        const senhaInp = document.createElement('input'); senhaInp.type='password'; senhaInp.className='border rounded px-2 py-1'; senhaInp.id='un_senha'
+        senhaWrap.appendChild(senhaLabel); senhaWrap.appendChild(senhaInp); grid.appendChild(senhaWrap)
+
+        const ativoWrap = document.createElement('div'); ativoWrap.className='flex items-center gap-2'
+        const ativoInp = document.createElement('input'); ativoInp.type='checkbox'; ativoInp.id='un_ativo'; ativoInp.className='h-4 w-4'
+        const ativoLabel = document.createElement('label'); ativoLabel.className='text-xs text-slate-600'; ativoLabel.textContent='Ativo'
+        ativoWrap.appendChild(ativoInp); ativoWrap.appendChild(ativoLabel); grid.appendChild(ativoWrap)
+
+        // Perfis (somente para usuarios do sistema) - será populado abaixo quando necessario
+        const perfisWrap = document.createElement('div'); perfisWrap.className='flex flex-col'
+        const perfisLabel = document.createElement('label'); perfisLabel.className='text-xs text-slate-600 mb-1'; perfisLabel.textContent='Perfis'
+        const perfisSelect = document.createElement('select'); perfisSelect.id = 'un_perfis'; perfisSelect.className = 'border rounded px-2 py-1'; perfisSelect.size = 1
+        const perfisDisabled = document.createElement('input'); perfisDisabled.type = 'text'; perfisDisabled.className = 'border rounded px-2 py-1 bg-slate-100'; perfisDisabled.disabled = true; perfisDisabled.id = 'un_perfil_disabled'; perfisDisabled.style.display = 'none'
+        // id for preset perfil when using Cadastro de Responsáveis
+        let presetPerfilId = null
+        perfisWrap.appendChild(perfisLabel); perfisWrap.appendChild(perfisSelect); perfisWrap.appendChild(perfisDisabled); grid.appendChild(perfisWrap)
+
+        // Common document fields
+        const cpfWrap = document.createElement('div'); cpfWrap.className='flex flex-col'
+        const cpfLabel = document.createElement('label'); cpfLabel.className='text-xs text-slate-600 mb-1'; cpfLabel.textContent='CPF'
+        const cpfInp = document.createElement('input'); cpfInp.className='border rounded px-2 py-1'; cpfInp.id='un_cpf'
+        cpfWrap.appendChild(cpfLabel); cpfWrap.appendChild(cpfInp); grid.appendChild(cpfWrap)
+
+        const dataNascWrap = document.createElement('div'); dataNascWrap.className='flex flex-col'
+        const dataNascLabel = document.createElement('label'); dataNascLabel.className='text-xs text-slate-600 mb-1'; dataNascLabel.textContent='Data Nascimento'
+        const dataNascInp = document.createElement('input'); dataNascInp.type='date'; dataNascInp.className='border rounded px-2 py-1'; dataNascInp.id='un_data_nascimento'
+        dataNascWrap.appendChild(dataNascLabel); dataNascWrap.appendChild(dataNascInp); grid.appendChild(dataNascWrap)
+
+        const dataAdmWrap = document.createElement('div'); dataAdmWrap.className='flex flex-col'
+        const dataAdmLabel = document.createElement('label'); dataAdmLabel.className='text-xs text-slate-600 mb-1'; dataAdmLabel.textContent='Data Admissão (professor)'
+        const dataAdmInp = document.createElement('input'); dataAdmInp.type='date'; dataAdmInp.className='border rounded px-2 py-1'; dataAdmInp.id='un_data_admissao'
+        dataAdmWrap.appendChild(dataAdmLabel); dataAdmWrap.appendChild(dataAdmInp); grid.appendChild(dataAdmWrap)
+
+        // Address fields
+        const cepWrap = document.createElement('div'); cepWrap.className='flex flex-col'
+        const cepLabel = document.createElement('label'); cepLabel.className='text-xs text-slate-600 mb-1'; cepLabel.textContent='CEP'
+        const cepInp = document.createElement('input'); cepInp.className='border rounded px-2 py-1'; cepInp.id='un_cep'
+        cepWrap.appendChild(cepLabel); cepWrap.appendChild(cepInp)
+        const cepStatus = document.createElement('div'); cepStatus.className = 'text-xs text-slate-500 mt-1'; cepStatus.style.minHeight = '1rem'
+        cepWrap.appendChild(cepStatus);
+        grid.appendChild(cepWrap)
+        // id of existing endereco when editing
+        let existingEnderecoId = null
+
+        const logWrap = document.createElement('div'); logWrap.className='flex flex-col'
+        const logLabel = document.createElement('label'); logLabel.className='text-xs text-slate-600 mb-1'; logLabel.textContent='Logradouro'
+        const logInp = document.createElement('input'); logInp.className='border rounded px-2 py-1'; logInp.id='un_logradouro'
+        logWrap.appendChild(logLabel); logWrap.appendChild(logInp); grid.appendChild(logWrap)
+
+        const compWrap = document.createElement('div'); compWrap.className='flex flex-col'
+        const compLabel = document.createElement('label'); compLabel.className='text-xs text-slate-600 mb-1'; compLabel.textContent='Complemento'
+        const compInp = document.createElement('input'); compInp.className='border rounded px-2 py-1'; compInp.id='un_complemento'
+        compWrap.appendChild(compLabel); compWrap.appendChild(compInp); grid.appendChild(compWrap)
+
+        const numeroWrap = document.createElement('div'); numeroWrap.className='flex flex-col'
+        const numeroLabel = document.createElement('label'); numeroLabel.className='text-xs text-slate-600 mb-1'; numeroLabel.textContent='Número'
+        const numeroInp = document.createElement('input'); numeroInp.className='border rounded px-2 py-1'; numeroInp.id='un_numero'
+        numeroWrap.appendChild(numeroLabel); numeroWrap.appendChild(numeroInp); grid.appendChild(numeroWrap)
+
+        const bairroWrap = document.createElement('div'); bairroWrap.className='flex flex-col'
+        const bairroLabel = document.createElement('label'); bairroLabel.className='text-xs text-slate-600 mb-1'; bairroLabel.textContent='Bairro'
+        const bairroInp = document.createElement('input'); bairroInp.className='border rounded px-2 py-1'; bairroInp.id='un_bairro'
+        bairroWrap.appendChild(bairroLabel); bairroWrap.appendChild(bairroInp); grid.appendChild(bairroWrap)
+
+        const ufWrap = document.createElement('div'); ufWrap.className='flex flex-col'
+        const ufLabel = document.createElement('label'); ufLabel.className='text-xs text-slate-600 mb-1'; ufLabel.textContent='UF'
+        const ufInp = document.createElement('input'); ufInp.className='border rounded px-2 py-1'; ufInp.id='un_uf'
+        ufWrap.appendChild(ufLabel); ufWrap.appendChild(ufInp); grid.appendChild(ufWrap)
+
+        const cidadeWrap = document.createElement('div'); cidadeWrap.className='flex flex-col'
+        const cidadeLabel = document.createElement('label'); cidadeLabel.className='text-xs text-slate-600 mb-1'; cidadeLabel.textContent='Cidade'
+        const cidadeInp = document.createElement('input'); cidadeInp.className='border rounded px-2 py-1'; cidadeInp.id='un_cidade'
+        cidadeWrap.appendChild(cidadeLabel); cidadeWrap.appendChild(cidadeInp); grid.appendChild(cidadeWrap)
+
+        area.appendChild(grid)
+
+        // show/hide fields depending on tipo (respect opts.tipo when provided)
+        function refreshTipo(){
+          const tipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
+          dataNascWrap.style.display = tipo === 'aluno' ? '' : 'none'
+          cpfWrap.style.display = (tipo === 'aluno' || tipo === 'professor') ? '' : 'none'
+          dataAdmWrap.style.display = tipo === 'professor' ? '' : 'none'
+          // show responsáveis only for alunos
+          try{ responsaveisSection.style.display = tipo === 'aluno' ? '' : 'none' }catch(e){}
+        }
+        tipoSel.addEventListener('change', refreshTipo)
+        refreshTipo()
+
+        // ViaCEP lookup: fill address fields when CEP is entered
+        let cepTimer
+        cepInp.addEventListener('input', ()=>{ cepStatus.textContent=''; clearTimeout(cepTimer); cepTimer = setTimeout(runCepLookup, 600) })
+        cepInp.addEventListener('blur', runCepLookup)
+        async function runCepLookup(){
+          const raw = (cepInp.value || '').replace(/\D/g,'')
+          if(!raw || raw.length !== 8) return
+          cepStatus.textContent = 'Consultando CEP...'
+          try{
+            const res = await axios.get('https://viacep.com.br/ws/' + raw + '/json/')
+            const data = res.data
+            if(!data || data.erro){ cepStatus.textContent = 'CEP não encontrado'; cepStatus.className = 'text-xs text-red-600 mt-1'; return }
+            logInp.value = data.logradouro || ''
+            compInp.value = data.complemento || ''
+            bairroInp.value = data.bairro || ''
+            ufInp.value = data.uf || ''
+            cidadeInp.value = data.localidade || ''
+            cepStatus.textContent = ''
+            cepStatus.className = 'text-xs text-slate-500 mt-1'
+          }catch(e){ console.error('viacep', e); cepStatus.textContent = 'Erro ao consultar CEP'; cepStatus.className = 'text-xs text-red-600 mt-1' }
+        }
+
+        // Responsáveis (apenas para tipo aluno) — simplified: CPF lookup + nome preenchido
+        const responsaveisSection = document.createElement('div'); responsaveisSection.className = 'mt-4 col-span-2'
+        const respTitle = document.createElement('h4'); respTitle.className = 'font-semibold text-sm mb-2'; respTitle.textContent = 'Responsáveis (opcional)'
+        responsaveisSection.appendChild(respTitle)
+
+        // list of pending responsaveis
+        const respList = document.createElement('ul'); respList.className = 'mb-2 list-disc pl-5 text-sm text-slate-700'
+        responsaveisSection.appendChild(respList)
+
+        // input: CPF to lookup existing user and Name display (auto-filled)
+        const lookupWrap = document.createElement('div'); lookupWrap.className = 'flex gap-2 items-end mb-2'
+        const cpfResp = document.createElement('input'); cpfResp.placeholder = 'CPF do responsável'; cpfResp.className='border rounded px-2 py-1'; cpfResp.style.minWidth='200px'
+        const nomeResp = document.createElement('input'); nomeResp.placeholder = 'Nome (preenchido)'; nomeResp.className='border rounded px-2 py-1 flex-1'; nomeResp.readOnly = true
+        const addRespBtn = document.createElement('button'); addRespBtn.className='px-2 py-1 bg-slate-100 rounded text-sm'; addRespBtn.textContent='Adicionar'
+        lookupWrap.appendChild(cpfResp); lookupWrap.appendChild(nomeResp); lookupWrap.appendChild(addRespBtn)
+        responsaveisSection.appendChild(lookupWrap)
+
+        const pendingResponsaveis = []
+        function refreshRespList(){
+          respList.innerHTML = ''
+          pendingResponsaveis.forEach((r, idx)=>{
+            const li = document.createElement('li'); li.textContent = (r.nome || ('#' + r.id_usuario))
+            const rem = document.createElement('button'); rem.className='ml-2 text-red-600 text-xs'; rem.textContent='Remover'; rem.addEventListener('click', ()=>{ pendingResponsaveis.splice(idx,1); refreshRespList() })
+            li.appendChild(rem); respList.appendChild(li)
+          })
+        }
+
+        // lookup by CPF: search in alunos and professores to map to a usuario
+        async function lookupResponsavelByCpf(){
+          const raw = (cpfResp.value || '').replace(/\D/g,'')
+          nomeResp.value = ''
+          if(!raw || raw.length !== 11) return
+          try{
+            const [aRes, pRes, uRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores'), axios.get('/usuarios')])
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const profs = Array.isArray(pRes.data)? pRes.data : []
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            const foundA = alunos.find(a=> (a.cpf||'') === raw)
+            const foundP = profs.find(p=> (p.cpf||'') === raw)
+            let userId = null
+            if(foundA) userId = foundA.id_usuario
+            else if(foundP) userId = foundP.id_usuario
+            if(userId){ const u = users.find(x=> String(x.id_usuario) === String(userId)); if(u) nomeResp.value = u.nome }
+          }catch(e){ console.error('lookupResponsavelByCpf', e) }
+        }
+
+        // If this form is for 'usuario', load perfis and build radio buttons (single selection)
+        if(opts && opts.tipo === 'usuario'){
+          try{
+            const pRes = await axios.get('/perfis')
+            const perfis = Array.isArray(pRes.data)? pRes.data : []
+            perfisSelect.innerHTML = ''
+            // when cadastroResponsaveis, preset to RESPONSAVEL and show disabled input
+            if(opts.cadastroResponsaveis){
+              const found = perfis.find(pp=> String((pp.nome||'').toUpperCase()) === 'RESPONSAVEL' || String((pp.nome||'').toUpperCase()) === 'RESPONSÁVEL')
+              if(found){
+                presetPerfilId = found.id_perfil || found.id
+                try{ perfisDisabled.value = found.nome }catch(e){}
+                perfisDisabled.style.display = ''
+                perfisSelect.style.display = 'none'
+              } else {
+                // fallback: populate select
+                perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) })
+              }
+            } else {
+              perfis.forEach(p=>{
+                const id = p.id_perfil || p.id
+                const o = document.createElement('option')
+                o.value = id
+                o.textContent = p.nome || p.nome
+                perfisSelect.appendChild(o)
+              })
+            }
+          }catch(e){ console.error('load perfis', e) }
+        } else {
+          // hide perfis control for non-usuarios
+          perfisWrap.style.display = 'none'
+        }
+
+        cpfResp.addEventListener('blur', lookupResponsavelByCpf)
+        cpfResp.addEventListener('input', ()=>{ nomeResp.value = '' })
+
+        addRespBtn.addEventListener('click', async ()=>{
+          const raw = (cpfResp.value || '').replace(/\D/g,'')
+          if(!raw || raw.length !== 11){ toast('CPF inválido', true); return }
+          // attempt lookup; if not found, warn
+          await lookupResponsavelByCpf()
+          if(!nomeResp.value){ toast('Usuário com esse CPF não encontrado', true); return }
+          // find usuario id
+          try{
+            const uRes = await axios.get('/usuarios')
+            const users = Array.isArray(uRes.data)? uRes.data : []
+            // find matching usuario by name (best-effort) via alunos/professores mapping
+            const [aRes, pRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores')])
+            const alunos = Array.isArray(aRes.data)? aRes.data : []
+            const profs = Array.isArray(pRes.data)? pRes.data : []
+            const foundA = alunos.find(a=> (a.cpf||'') === raw)
+            const foundP = profs.find(p=> (p.cpf||'') === raw)
+            let userId = foundA ? foundA.id_usuario : (foundP ? foundP.id_usuario : null)
+            if(!userId){ toast('Usuário não encontrado para vincular', true); return }
+            if(pendingResponsaveis.some(p=> String(p.id_usuario) === String(userId))){ toast('Responsável já adicionado', true); return }
+            const userObj = users.find(u=> String(u.id_usuario) === String(userId))
+            pendingResponsaveis.push({ id_usuario: userId, nome: (userObj? userObj.nome : nomeResp.value) })
+            refreshRespList()
+            cpfResp.value=''; nomeResp.value=''
+          }catch(e){ console.error('add responsavel', e); toast('Erro ao adicionar responsável', true) }
+        })
+
+        // attach responsaveis section (it will be hidden for professor via refreshTipo)
+        area.appendChild(responsaveisSection)
+
+        // If editing, prefill fields (usuario, aluno/professor specific, endereco, responsaveis)
+        if(opts && opts.editing){
+          (async ()=>{
+            const ed = opts.editing || {}
+            try{
+              // populate usuario fields from id_usuario if available
+                  if(ed.id_usuario){
+                    try{
+                      const uRes = await axios.get('/usuarios')
+                      const users = Array.isArray(uRes.data)? uRes.data : []
+                      const u = users.find(x=> String(x.id_usuario) === String(ed.id_usuario))
+                      if(u){ nomeInp.value = u.nome || ''; emailInp.value = u.email || ''; ativoInp.checked = Boolean(u.ativo)
+                        // preselect perfis if present (radio inputs)
+                        try{
+                          const selected = u._perfis || (ed._perfis || [])
+                          const selIds = Array.isArray(selected) ? selected.map(x=> Number(x.id_perfil || x || x.id || x)) : []
+                          if(selIds.length){
+                            const target = String(selIds[0])
+                            try{ perfisSelect.value = target }catch(e){}
+                          }
+                        }catch(e){}
+                      }
+                    }catch(e){}
+                  } else if(ed.nome){ nomeInp.value = ed.nome }
+
+              if(ed.cpf) cpfInp.value = ed.cpf
+              if(ed.data_nascimento) dataNascInp.value = ed.data_nascimento
+              if(ed.data_admissao) dataAdmInp.value = ed.data_admissao
+
+              // endereco: find first endereco for this usuario
+              if(ed.id_usuario){
+                try{
+                  const eRes = await axios.get('/enderecos')
+                  const ends = Array.isArray(eRes.data)? eRes.data : []
+                  const my = ends.find(x=> String(x.tb_usuarios_id_usuario) === String(ed.id_usuario))
+                  if(my){ existingEnderecoId = my.id_endereco || my.id || my.id_endereco || null; cepInp.value = my.cep || ''; logInp.value = my.logradouro || ''; compInp.value = my.complemento || ''; numeroInp.value = my.numero || ''; bairroInp.value = my.bairro || ''; ufInp.value = my.uf || ''; cidadeInp.value = my.cidade || '' }
+                }catch(e){}
+              }
+
+              // responsaveis: if editing an aluno, load existing links
+              if(ed.id_aluno){
+                try{
+                  const rRes = await axios.get('/responsaveis', { params: { alunoId: ed.id_aluno } })
+                  const links = Array.isArray(rRes.data)? rRes.data : []
+                  if(links.length){
+                    try{
+                      const uRes = await axios.get('/usuarios')
+                      const users = Array.isArray(uRes.data)? uRes.data : []
+                      links.forEach(l=>{
+                        const u = users.find(x=> String(x.id_usuario) === String(l.tb_usuarios_id_usuario))
+                        pendingResponsaveis.push({ id_usuario: l.tb_usuarios_id_usuario, nome: u? u.nome : String(l.tb_usuarios_id_usuario) })
+                      })
+                      refreshRespList()
+                    }catch(e){}
+                  }
+                }catch(e){}
+              }
+            }catch(e){ console.error('prefill unified form', e) }
+          })()
+        }
+
+        const btnSave = document.createElement('button'); btnSave.className='px-3 py-1 bg-schoolBlue-500 text-white rounded mr-2'; btnSave.textContent='Salvar'
+        const statusDiv = document.createElement('div'); statusDiv.className = 'mt-3 text-sm'
+        btnSave.addEventListener('click', async ()=>{
+          const tipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
+          const usuarioPayload = { nome: nomeInp.value, email: emailInp.value }
+          if(senhaInp.value) usuarioPayload.senha = senhaInp.value
+          usuarioPayload.ativo = ativoInp.checked
+          // include perfis when visible
+          try{
+            if(perfisWrap.style.display !== 'none'){
+              if(opts && opts.cadastroResponsaveis && presetPerfilId){
+                usuarioPayload.perfis = [ Number(presetPerfilId) ]
+              } else {
+                const v = perfisSelect.value
+                if(v) usuarioPayload.perfis = [ Number(v) ]
+              }
+            }
+          }catch(e){}
+          // disable while saving
+          btnSave.disabled = true; btnSave.textContent = 'Salvando...'; statusDiv.textContent = ''
+          try{
+            // create or update usuario
+            const isEditing = opts && opts.editing
+            let uRes
+            if(isEditing){
+              const userId = opts.editing.id_usuario || opts.editing.id
+              uRes = await axios.put('/usuarios/' + userId, usuarioPayload)
+            } else {
+              uRes = await axios.post('/usuarios', usuarioPayload)
+            }
+            const user = uRes.data || {}
+            const id_usuario = user.id_usuario || user.id || user.id_usuario
+            if(!id_usuario) throw new Error('Usuário criado sem id_usuario')
+
+            // create or update aluno/professor when applicable
+            let createdAlunoId = null
+            if(tipo === 'aluno'){
+              const alunoPayload = { id_usuario: id_usuario, cpf: (cpfInp.value||'').replace(/\D/g,''), data_nascimento: dataNascInp.value || null }
+              if(opts && opts.editing && (opts.editing.id_aluno || opts.editing.id)){
+                const aid = opts.editing.id_aluno || opts.editing.id
+                try{ await axios.put('/alunos/' + aid, alunoPayload) }catch(e){ console.error('update aluno', e) }
+                createdAlunoId = aid
+              } else {
+                const aRes = await axios.post('/alunos', alunoPayload)
+                const aData = aRes.data || {}
+                createdAlunoId = aData.id_aluno || aData.id || aData.id_aluno
+              }
+            } else if(tipo === 'professor'){
+              const profPayload = { id_usuario: id_usuario, cpf: (cpfInp.value||'').replace(/\D/g,''), data_admissao: dataAdmInp.value || null }
+              if(opts && opts.editing && (opts.editing.id_professor || opts.editing.id)){
+                const pid = opts.editing.id_professor || opts.editing.id
+                try{ await axios.put('/professores/' + pid, profPayload) }catch(e){ console.error('update professor', e) }
+              } else {
+                try{ await axios.post('/professores', profPayload) }catch(e){}
+              }
+            } else {
+              // tipo === 'usuario' -> do not create aluno/professor
+            }
+
+            // create endereco (optional fields allowed)
+            const enderecoPayload = {
+              tb_usuarios_id_usuario: id_usuario,
+              cep: cepInp.value || null,
+              logradouro: logInp.value || null,
+              complemento: compInp.value || null,
+              numero: numeroInp.value || null,
+              bairro: bairroInp.value || null,
+              uf: ufInp.value || null,
+              cidade: cidadeInp.value || null
+            }
+            // create or update endereco
+            try{
+              if(isEditing && existingEnderecoId){
+                await axios.put('/enderecos/' + existingEnderecoId, enderecoPayload)
+              } else {
+                await axios.post('/enderecos', enderecoPayload)
+              }
+            }catch(e){ console.error('save endereco', e) }
+
+            // if there are pending responsaveis and we created an aluno, link them
+            if(tipo === 'aluno' && createdAlunoId){
+              for(const r of (pendingResponsaveis || [])){
+                try{ await axios.post('/responsaveis', { tb_alunos_id_aluno: createdAlunoId, tb_usuarios_id_usuario: r.id_usuario }) }catch(e){ console.error('link responsavel', e) }
+              }
+            }
+
+            // success
+            statusDiv.className = 'mt-3 text-sm text-green-600'
+            statusDiv.textContent = 'Cadastro de responsáveis realizado com sucesso.'
+            toast('Cadastro de responsáveis realizado com sucesso')
+            // refresh users and relevant lists (use safe wrapper)
+            await safeLoadAndRender('usuarios')
+            await safeLoadAndRender('alunos')
+            await safeLoadAndRender('professores')
+            // remove form after short delay so user sees success
+            setTimeout(()=> area.remove(), 1200)
+          }catch(err){
+            console.error('cadastro-responsaveis', err)
+            const msg = err && err.response && (err.response.data && (err.response.data.error || err.response.data.message)) ? (err.response.data.error || err.response.data.message) : (err.message || 'Erro no cadastro')
+            statusDiv.className = 'mt-3 text-sm text-red-600'
+            statusDiv.textContent = 'Erro: ' + msg
+            toast('Erro no cadastro: ' + msg, true)
+          }finally{
+            btnSave.disabled = false; btnSave.textContent = 'Salvar'
+          }
+        })
+        const btnCancel = document.createElement('button'); btnCancel.className='px-3 py-1 bg-slate-100 rounded'; btnCancel.textContent='Cancelar'; btnCancel.addEventListener('click', ()=> area.remove())
+        const actions = document.createElement('div'); actions.className='mt-3'; actions.appendChild(btnSave); actions.appendChild(btnCancel)
+        area.appendChild(actions)
+        area.appendChild(statusDiv)
+        content.appendChild(area)
+      }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   </head>
@@ -59,7 +503,8 @@
     (function(){
       // enhanced: fetchOptions for FK selects, filters and dynamic selects
       const ENTITIES = {
-        'usuarios': { label: 'Usuários', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
+        'usuarios': { label: 'Usuarios do Sistema', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
+        'cadastro-unificado': { label: 'Cadastro de Responsáveis' },
         'perfis': { label: 'Perfis', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
         'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
         'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
@@ -196,9 +641,23 @@
         header.className = 'flex items-center justify-between mb-4'
         const h = document.createElement('h2'); h.className='text-2xl font-semibold'; h.textContent = meta.label
         const btn = document.createElement('button'); btn.className='px-3 py-1 bg-schoolGreen-500 text-white rounded'; btn.textContent='Novo'
-        btn.addEventListener('click', ()=> showForm(entity))
+        btn.addEventListener('click', ()=>{
+          // make unified form the default creation UI for alunos/professores and usuarios
+          if(entity === 'alunos') return showUnifiedForm({ tipo: 'aluno' })
+          if(entity === 'professores') return showUnifiedForm({ tipo: 'professor' })
+          if(entity === 'usuarios') return showUnifiedForm({ tipo: 'usuario' })
+          // fallback to existing generic form
+          return showForm(entity)
+        })
         header.appendChild(h); header.appendChild(btn)
         content.appendChild(header)
+
+          // Handle unified registration screen
+          if(entity === 'cadastro-unificado'){
+            // open as Cadastro de Responsáveis: always a system user with RESPONSAVEL perfil
+            await showUnifiedForm({ tipo: 'usuario', cadastroResponsaveis: true })
+            return
+          }
 
         // filters (some entities may show a custom filter input)
         const filters = {}
@@ -613,7 +1072,14 @@
             tr.appendChild(td)
           })
           const td = document.createElement('td'); td.className='p-2'
-          const ebtn = document.createElement('button'); ebtn.className='mr-2 text-indigo-600'; ebtn.textContent='Editar'; ebtn.addEventListener('click', ()=> showForm(entity, it))
+          const ebtn = document.createElement('button'); ebtn.className='mr-2 text-indigo-600'; ebtn.textContent='Editar'; ebtn.addEventListener('click', ()=> {
+            if(['alunos','professores','usuarios'].includes(entity)){
+              const tipo = entity === 'alunos' ? 'aluno' : (entity === 'professores' ? 'professor' : 'usuario')
+              showUnifiedForm({ tipo, editing: it })
+            } else {
+              showForm(entity, it)
+            }
+          })
           const dbtn = document.createElement('button'); dbtn.className='text-red-600'; dbtn.textContent='Remover'; dbtn.addEventListener('click', ()=> removeItem(entity, it))
           td.appendChild(ebtn); td.appendChild(dbtn); tr.appendChild(td)
           tbody.appendChild(tr)

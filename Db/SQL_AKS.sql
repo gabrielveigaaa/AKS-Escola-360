@@ -68,6 +68,46 @@ CREATE TABLE tb_alunos (
 ) ENGINE=InnoDB;
 
 -- ======================
+-- ENDEREÇOS E RESPONSÁVEIS
+-- ======================
+
+CREATE TABLE tb_endereco (
+        id_endereco INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        cep VARCHAR(9) DEFAULT NULL,
+        logradouro VARCHAR(100) DEFAULT NULL,
+        complemento VARCHAR(45) DEFAULT NULL,
+        numero VARCHAR(45) DEFAULT NULL,
+        bairro VARCHAR(45) DEFAULT NULL,
+        uf VARCHAR(45) DEFAULT NULL,
+        cidade VARCHAR(45) DEFAULT NULL,
+        tb_usuarios_id_usuario INT NOT NULL,
+        INDEX fk_tb_endereco_tb_usuarios_idx (tb_usuarios_id_usuario),
+        CONSTRAINT fk_tb_endereco_tb_usuarios
+            FOREIGN KEY (tb_usuarios_id_usuario)
+            REFERENCES tb_usuarios (id_usuario)
+            ON DELETE NO ACTION
+            ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+CREATE TABLE tb_responsaveis (
+    tb_alunos_id_aluno INT NOT NULL,
+    tb_usuarios_id_usuario INT NOT NULL,
+    PRIMARY KEY (tb_alunos_id_aluno, tb_usuarios_id_usuario),
+    INDEX fk_tb_alunos_has_tb_usuarios_tb_usuarios1_idx (tb_usuarios_id_usuario),
+    INDEX fk_tb_alunos_has_tb_usuarios_tb_alunos1_idx (tb_alunos_id_aluno),
+    CONSTRAINT fk_tb_alunos_has_tb_usuarios_tb_alunos1
+        FOREIGN KEY (tb_alunos_id_aluno)
+        REFERENCES tb_alunos (id_aluno)
+        ON DELETE NO ACTION
+        ON UPDATE NO ACTION,
+    CONSTRAINT fk_tb_alunos_has_tb_usuarios_tb_usuarios1
+        FOREIGN KEY (tb_usuarios_id_usuario)
+        REFERENCES tb_usuarios (id_usuario)
+        ON DELETE NO ACTION
+        ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ======================
 -- TURMAS E DISCIPLINAS
 -- ======================
 
