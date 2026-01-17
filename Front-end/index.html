@@ -59,8 +59,8 @@
         tipoSel.appendChild(new Option('Professor','professor'))
         // if opts.tipo is provided and is one of the selectable values, pre-select it
         if(opts && (opts.tipo === 'aluno' || opts.tipo === 'professor')){ try{ tipoSel.value = opts.tipo }catch(e){} }
-        // hide tipo selector only when opening specifically for 'usuario'
-        if(opts && opts.tipo === 'usuario') tipoWrap.style.display = 'none'
+        // hide tipo selector when opening specifically for 'usuario' or 'professor'
+        if(opts && (opts.tipo === 'usuario' || opts.tipo === 'professor')) tipoWrap.style.display = 'none'
         tipoWrap.appendChild(tipoLabel); tipoWrap.appendChild(tipoSel); grid.appendChild(tipoWrap)
 
         // Usuario fields
@@ -233,7 +233,7 @@
         }
 
         // If this form is for 'usuario', load perfis and build radio buttons (single selection)
-        if(opts && opts.tipo === 'usuario'){
+        if(opts && (opts.tipo === 'usuario' || opts.tipo === 'professor' || opts.cadastroResponsaveis)){
           try{
             const pRes = await axios.get('/perfis')
             const perfis = Array.isArray(pRes.data)? pRes.data : []
@@ -247,21 +247,19 @@
                 perfisDisabled.style.display = ''
                 perfisSelect.style.display = 'none'
               } else {
-                // fallback: populate select
                 perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) })
               }
+            } else if(opts.tipo === 'professor'){
+              // preset to PROFESSOR for professor forms
+              const found = perfis.find(pp=> String((pp.nome||'').toUpperCase()) === 'PROFESSOR')
+              if(found){ presetPerfilId = found.id_perfil || found.id; try{ perfisDisabled.value = found.nome }catch(e){}; perfisDisabled.style.display = ''; perfisSelect.style.display = 'none' }
+              else { perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) }) }
             } else {
-              perfis.forEach(p=>{
-                const id = p.id_perfil || p.id
-                const o = document.createElement('option')
-                o.value = id
-                o.textContent = p.nome || p.nome
-                perfisSelect.appendChild(o)
-              })
+              perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) })
             }
           }catch(e){ console.error('load perfis', e) }
         } else {
-          // hide perfis control for non-usuarios
+          // hide perfis control for non-usuarios and non-professores
           perfisWrap.style.display = 'none'
         }
 
@@ -368,7 +366,7 @@
           // include perfis when visible
           try{
             if(perfisWrap.style.display !== 'none'){
-              if(opts && opts.cadastroResponsaveis && presetPerfilId){
+              if((opts && opts.cadastroResponsaveis && presetPerfilId) || (opts && opts.tipo === 'professor' && presetPerfilId)){
                 usuarioPayload.perfis = [ Number(presetPerfilId) ]
               } else {
                 const v = perfisSelect.value
