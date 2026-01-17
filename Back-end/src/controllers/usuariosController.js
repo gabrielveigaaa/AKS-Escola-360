@@ -91,8 +91,13 @@ module.exports = {
 			const id = req.params.id;
 			const item = await Usuario.findByPk(id);
 			if (!item) return res.status(404).json({ error: 'Not found' });
-			await item.destroy();
-			res.status(204).send();
+			// Soft-disable: never delete a usuario, just mark as inactive
+			try{
+				await item.update({ ativo: false });
+				const o = item.toJSON(); delete o.senha_hash; res.json(o);
+			}catch(e){
+				return res.status(500).json({ error: e.message });
+			}
 		} catch (err) {
 			res.status(500).json({ error: err.message });
 		}

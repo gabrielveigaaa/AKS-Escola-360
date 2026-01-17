@@ -57,11 +57,16 @@
         const tipoSel = document.createElement('select'); tipoSel.className='border rounded px-2 py-1'; tipoSel.id='un_tipo'
         tipoSel.appendChild(new Option('Aluno','aluno'))
         tipoSel.appendChild(new Option('Professor','professor'))
+        // input disabled variant used when the form is specifically for 'aluno'
+        const tipoDisabled = document.createElement('input'); tipoDisabled.type = 'text'; tipoDisabled.className = 'border rounded px-2 py-1 bg-slate-100'; tipoDisabled.disabled = true; tipoDisabled.id = 'un_tipo_disabled'; tipoDisabled.value = 'ESTUDANTE'
         // if opts.tipo is provided and is one of the selectable values, pre-select it
         if(opts && (opts.tipo === 'aluno' || opts.tipo === 'professor')){ try{ tipoSel.value = opts.tipo }catch(e){} }
-        // hide tipo selector only when opening specifically for 'usuario'
-        if(opts && opts.tipo === 'usuario') tipoWrap.style.display = 'none'
-        tipoWrap.appendChild(tipoLabel); tipoWrap.appendChild(tipoSel); grid.appendChild(tipoWrap)
+        // hide tipo selector when opening specifically for 'usuario' or 'professor'
+        if(opts && (opts.tipo === 'usuario' || opts.tipo === 'professor')) tipoWrap.style.display = 'none'
+        // append disabled input when this is the aluno form, otherwise show select
+        tipoWrap.appendChild(tipoLabel);
+        if(opts && opts.tipo === 'aluno'){ tipoWrap.appendChild(tipoDisabled) } else { tipoWrap.appendChild(tipoSel) }
+        grid.appendChild(tipoWrap)
 
         // Usuario fields
         const nomeWrap = document.createElement('div'); nomeWrap.className='flex flex-col'
@@ -84,9 +89,9 @@
         const ativoLabel = document.createElement('label'); ativoLabel.className='text-xs text-slate-600'; ativoLabel.textContent='Ativo'
         ativoWrap.appendChild(ativoInp); ativoWrap.appendChild(ativoLabel); grid.appendChild(ativoWrap)
 
-        // Perfis (somente para usuarios do sistema) - será populado abaixo quando necessario
+        // Tipos de Perfil (somente para usuarios do sistema) - será populado abaixo quando necessario
         const perfisWrap = document.createElement('div'); perfisWrap.className='flex flex-col'
-        const perfisLabel = document.createElement('label'); perfisLabel.className='text-xs text-slate-600 mb-1'; perfisLabel.textContent='Perfis'
+        const perfisLabel = document.createElement('label'); perfisLabel.className='text-xs text-slate-600 mb-1'; perfisLabel.textContent='Tipos de Perfil'
         const perfisSelect = document.createElement('select'); perfisSelect.id = 'un_perfis'; perfisSelect.className = 'border rounded px-2 py-1'; perfisSelect.size = 1
         const perfisDisabled = document.createElement('input'); perfisDisabled.type = 'text'; perfisDisabled.className = 'border rounded px-2 py-1 bg-slate-100'; perfisDisabled.disabled = true; perfisDisabled.id = 'un_perfil_disabled'; perfisDisabled.style.display = 'none'
         // id for preset perfil when using Cadastro de Responsáveis
@@ -232,8 +237,8 @@
           }catch(e){ console.error('lookupResponsavelByCpf', e) }
         }
 
-        // If this form is for 'usuario', load perfis and build radio buttons (single selection)
-        if(opts && opts.tipo === 'usuario'){
+        // If this form is for 'usuario' (or aluno/professor/cadastroResponsaveis), load perfis and build options
+        if(opts && (opts.tipo === 'usuario' || opts.tipo === 'professor' || opts.cadastroResponsave || opts.tipo === 'aluno')){
           try{
             const pRes = await axios.get('/perfis')
             const perfis = Array.isArray(pRes.data)? pRes.data : []
@@ -247,21 +252,27 @@
                 perfisDisabled.style.display = ''
                 perfisSelect.style.display = 'none'
               } else {
-                // fallback: populate select
                 perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) })
               }
-            } else {
-              perfis.forEach(p=>{
-                const id = p.id_perfil || p.id
-                const o = document.createElement('option')
-                o.value = id
-                o.textContent = p.nome || p.nome
-                perfisSelect.appendChild(o)
+            } else if(opts.tipo === 'professor'){
+              // preset to PROFESSOR for professor forms
+              const found = perfis.find(pp=> String((pp.nome||'').toUpperCase()) === 'PROFESSOR')
+              if(found){ presetPerfilId = found.id_perfil || found.id; try{ perfisDisabled.value = found.nome }catch(e){}; perfisDisabled.style.display = ''; perfisSelect.style.display = 'none' }
+              else { perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) }) }
+            } else if(opts.tipo === 'aluno'){
+              // preset to ESTUDANTE (or ALUNO) for aluno forms
+              const found = perfis.find(pp=> {
+                const n = String((pp.nome||'').toUpperCase())
+                return n === 'ESTUDANTE' || n === 'ALUNO'
               })
+              if(found){ presetPerfilId = found.id_perfil || found.id; try{ perfisDisabled.value = found.nome }catch(e){}; perfisDisabled.style.display = ''; perfisSelect.style.display = 'none' }
+              else { perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) }) }
+            } else {
+              perfis.forEach(p=>{ const id = p.id_perfil || p.id; const o = document.createElement('option'); o.value = id; o.textContent = p.nome || p.nome; perfisSelect.appendChild(o) })
             }
           }catch(e){ console.error('load perfis', e) }
         } else {
-          // hide perfis control for non-usuarios
+          // hide perfis control for non-usuarios and non-professores
           perfisWrap.style.display = 'none'
         }
 
@@ -294,7 +305,11 @@
           }catch(e){ console.error('add responsavel', e); toast('Erro ao adicionar responsável', true) }
         })
 
-        // attach responsaveis section (it will be hidden for professor via refreshTipo)
+        // attach responsaveis section (only visible for alunos)
+        try{
+          const currentTipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
+          responsaveisSection.style.display = currentTipo === 'aluno' ? '' : 'none'
+        }catch(e){}
         area.appendChild(responsaveisSection)
 
         // If editing, prefill fields (usuario, aluno/professor specific, endereco, responsaveis)
@@ -368,7 +383,7 @@
           // include perfis when visible
           try{
             if(perfisWrap.style.display !== 'none'){
-              if(opts && opts.cadastroResponsaveis && presetPerfilId){
+              if((opts && opts.cadastroResponsaveis && presetPerfilId) || (opts && opts.tipo === 'professor' && presetPerfilId) || (opts && opts.tipo === 'aluno' && presetPerfilId)){
                 usuarioPayload.perfis = [ Number(presetPerfilId) ]
               } else {
                 const v = perfisSelect.value
@@ -505,7 +520,7 @@
       const ENTITIES = {
         'usuarios': { label: 'Usuarios do Sistema', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
         'cadastro-unificado': { label: 'Cadastro de Responsáveis' },
-        'perfis': { label: 'Perfis', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
+        'perfis': { label: 'Tipos de Perfil', fields: [ {name:'nome',label:'Nome',type:'text'} ] },
         'professores': { label: 'Professores', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_admissao',label:'Data Admissão',type:'date'} ] },
         'alunos': { label: 'Alunos', fields: [ {name:'id_usuario',label:'Usuário',type:'select', source:'/usuarios', valueKey:'id_usuario', labelKey:'nome'},{name:'cpf',label:'CPF',type:'text'},{name:'data_nascimento',label:'Data Nasc.',type:'date'} ] },
         'turmas': { label: 'Turmas', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'ano_letivo',label:'Ano Letivo',type:'number'},{name:'turno',label:'Turno',type:'select',options:['MANHA','TARDE','NOITE']},{name:'ativa',label:'Ativa',type:'checkbox'} ] },
