@@ -79,6 +79,16 @@
         const emailInp = document.createElement('input'); emailInp.type='email'; emailInp.className='border rounded px-2 py-1'; emailInp.id='un_email'
         emailWrap.appendChild(emailLabel); emailWrap.appendChild(emailInp); grid.appendChild(emailWrap)
 
+        const rgWrap = document.createElement('div'); rgWrap.className='flex flex-col'
+        const rgLabel = document.createElement('label'); rgLabel.className='text-xs text-slate-600 mb-1'; rgLabel.textContent='RG'
+        const rgInp = document.createElement('input'); rgInp.className='border rounded px-2 py-1'; rgInp.id='un_rg'
+        rgWrap.appendChild(rgLabel); rgWrap.appendChild(rgInp); grid.appendChild(rgWrap)
+
+        const cpfUsuarioWrap = document.createElement('div'); cpfUsuarioWrap.className='flex flex-col'
+        const cpfUsuarioLabel = document.createElement('label'); cpfUsuarioLabel.className='text-xs text-slate-600 mb-1'; cpfUsuarioLabel.textContent='CPF (usuário)'
+        const cpfUsuarioInp = document.createElement('input'); cpfUsuarioInp.className='border rounded px-2 py-1'; cpfUsuarioInp.id='un_cpf_usuario'
+        cpfUsuarioWrap.appendChild(cpfUsuarioLabel); cpfUsuarioWrap.appendChild(cpfUsuarioInp); grid.appendChild(cpfUsuarioWrap)
+
         const senhaWrap = document.createElement('div'); senhaWrap.className='flex flex-col'
         const senhaLabel = document.createElement('label'); senhaLabel.className='text-xs text-slate-600 mb-1'; senhaLabel.textContent='Senha'
         const senhaInp = document.createElement('input'); senhaInp.type='password'; senhaInp.className='border rounded px-2 py-1'; senhaInp.id='un_senha'
@@ -98,16 +108,30 @@
         let presetPerfilId = null
         perfisWrap.appendChild(perfisLabel); perfisWrap.appendChild(perfisSelect); perfisWrap.appendChild(perfisDisabled); grid.appendChild(perfisWrap)
 
-        // Common document fields
-        const cpfWrap = document.createElement('div'); cpfWrap.className='flex flex-col'
-        const cpfLabel = document.createElement('label'); cpfLabel.className='text-xs text-slate-600 mb-1'; cpfLabel.textContent='CPF'
-        const cpfInp = document.createElement('input'); cpfInp.className='border rounded px-2 py-1'; cpfInp.id='un_cpf'
-        cpfWrap.appendChild(cpfLabel); cpfWrap.appendChild(cpfInp); grid.appendChild(cpfWrap)
+        // Common document fields (single CPF field: use CPF (usuário) only)
 
         const dataNascWrap = document.createElement('div'); dataNascWrap.className='flex flex-col'
         const dataNascLabel = document.createElement('label'); dataNascLabel.className='text-xs text-slate-600 mb-1'; dataNascLabel.textContent='Data Nascimento'
         const dataNascInp = document.createElement('input'); dataNascInp.type='date'; dataNascInp.className='border rounded px-2 py-1'; dataNascInp.id='un_data_nascimento'
         dataNascWrap.appendChild(dataNascLabel); dataNascWrap.appendChild(dataNascInp); grid.appendChild(dataNascWrap)
+
+        const nomeMaeWrap = document.createElement('div'); nomeMaeWrap.className='flex flex-col'
+        const nomeMaeLabel = document.createElement('label'); nomeMaeLabel.className='text-xs text-slate-600 mb-1'; nomeMaeLabel.textContent='Nome da Mãe'
+        const nomeMaeInp = document.createElement('input'); nomeMaeInp.className='border rounded px-2 py-1'; nomeMaeInp.id='un_nome_mae'
+        nomeMaeWrap.appendChild(nomeMaeLabel); nomeMaeWrap.appendChild(nomeMaeInp); grid.appendChild(nomeMaeWrap)
+
+        const nomePaiWrap = document.createElement('div'); nomePaiWrap.className='flex flex-col'
+        const nomePaiLabel = document.createElement('label'); nomePaiLabel.className='text-xs text-slate-600 mb-1'; nomePaiLabel.textContent='Nome do Pai'
+        const nomePaiInp = document.createElement('input'); nomePaiInp.className='border rounded px-2 py-1'; nomePaiInp.id='un_nome_pai'
+        nomePaiWrap.appendChild(nomePaiLabel); nomePaiWrap.appendChild(nomePaiInp); grid.appendChild(nomePaiWrap)
+
+        const sexoWrap = document.createElement('div'); sexoWrap.className='flex flex-col'
+        const sexoLabel = document.createElement('label'); sexoLabel.className='text-xs text-slate-600 mb-1'; sexoLabel.textContent='Sexo'
+        const sexoSel = document.createElement('select'); sexoSel.className='border rounded px-2 py-1'; sexoSel.id='un_sexo'
+        sexoSel.appendChild(new Option('',''))
+        sexoSel.appendChild(new Option('M','M'))
+        sexoSel.appendChild(new Option('F','F'))
+        sexoWrap.appendChild(sexoLabel); sexoWrap.appendChild(sexoSel); grid.appendChild(sexoWrap)
 
         const dataAdmWrap = document.createElement('div'); dataAdmWrap.className='flex flex-col'
         const dataAdmLabel = document.createElement('label'); dataAdmLabel.className='text-xs text-slate-600 mb-1'; dataAdmLabel.textContent='Data Admissão (professor)'
@@ -157,12 +181,42 @@
 
         area.appendChild(grid)
 
+        // helper: enforce uppercase display and input normalization for text-like inputs
+        function enforceUppercaseForInput(input){
+          try{
+            if(!input) return
+            const t = (input.type || '').toLowerCase()
+            if(t === 'password' || t === 'date' || t === 'number' || t === 'checkbox') return
+            input.style.textTransform = 'uppercase'
+            // convert existing value (prefill) to uppercase for consistency
+            try{ if(typeof input.value === 'string') input.value = input.value.toUpperCase() }catch(e){}
+            input.addEventListener('input', ()=>{ try{ input.value = input.value.toUpperCase() }catch(e){} })
+          }catch(e){}
+        }
+        // apply to known inputs
+        enforceUppercaseForInput(nomeInp)
+        // email should not be forced to uppercase
+        enforceUppercaseForInput(rgInp)
+        enforceUppercaseForInput(cpfUsuarioInp)
+        enforceUppercaseForInput(nomeMaeInp)
+        enforceUppercaseForInput(nomePaiInp)
+        enforceUppercaseForInput(logInp)
+        enforceUppercaseForInput(compInp)
+        enforceUppercaseForInput(numeroInp)
+        enforceUppercaseForInput(bairroInp)
+        enforceUppercaseForInput(ufInp)
+        enforceUppercaseForInput(cidadeInp)
+
         // show/hide fields depending on tipo (respect opts.tipo when provided)
         function refreshTipo(){
           const tipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
           dataNascWrap.style.display = tipo === 'aluno' ? '' : 'none'
-          cpfWrap.style.display = (tipo === 'aluno' || tipo === 'professor') ? '' : 'none'
+          cpfUsuarioWrap.style.display = (tipo === 'aluno' || tipo === 'professor') ? '' : 'none'
           dataAdmWrap.style.display = tipo === 'professor' ? '' : 'none'
+          // show parent's name and sexo only for alunos
+          nomeMaeWrap.style.display = tipo === 'aluno' ? '' : 'none'
+          nomePaiWrap.style.display = tipo === 'aluno' ? '' : 'none'
+          sexoWrap.style.display = tipo === 'aluno' ? '' : 'none'
           // show responsáveis only for alunos
           try{ responsaveisSection.style.display = tipo === 'aluno' ? '' : 'none' }catch(e){}
         }
@@ -181,11 +235,11 @@
             const res = await axios.get('https://viacep.com.br/ws/' + raw + '/json/')
             const data = res.data
             if(!data || data.erro){ cepStatus.textContent = 'CEP não encontrado'; cepStatus.className = 'text-xs text-red-600 mt-1'; return }
-            logInp.value = data.logradouro || ''
-            compInp.value = data.complemento || ''
-            bairroInp.value = data.bairro || ''
-            ufInp.value = data.uf || ''
-            cidadeInp.value = data.localidade || ''
+            logInp.value = (data.logradouro || '').toUpperCase()
+            compInp.value = (data.complemento || '').toUpperCase()
+            bairroInp.value = (data.bairro || '').toUpperCase()
+            ufInp.value = (data.uf || '').toUpperCase()
+            cidadeInp.value = (data.localidade || '').toUpperCase()
             cepStatus.textContent = ''
             cepStatus.className = 'text-xs text-slate-500 mt-1'
           }catch(e){ console.error('viacep', e); cepStatus.textContent = 'Erro ao consultar CEP'; cepStatus.className = 'text-xs text-red-600 mt-1' }
@@ -212,28 +266,22 @@
         function refreshRespList(){
           respList.innerHTML = ''
           pendingResponsaveis.forEach((r, idx)=>{
-            const li = document.createElement('li'); li.textContent = (r.nome || ('#' + r.id_usuario))
+            const li = document.createElement('li'); li.textContent = (r.nome || ('#' + r.id_usuario)) + (r.cpf ? (' — ' + r.cpf) : '')
             const rem = document.createElement('button'); rem.className='ml-2 text-red-600 text-xs'; rem.textContent='Remover'; rem.addEventListener('click', ()=>{ pendingResponsaveis.splice(idx,1); refreshRespList() })
             li.appendChild(rem); respList.appendChild(li)
           })
         }
 
-        // lookup by CPF: search in alunos and professores to map to a usuario
+        // lookup by CPF: search in usuarios by cpf (cpf moved to tb_usuarios)
         async function lookupResponsavelByCpf(){
           const raw = (cpfResp.value || '').replace(/\D/g,'')
           nomeResp.value = ''
           if(!raw || raw.length !== 11) return
           try{
-            const [aRes, pRes, uRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores'), axios.get('/usuarios')])
-            const alunos = Array.isArray(aRes.data)? aRes.data : []
-            const profs = Array.isArray(pRes.data)? pRes.data : []
+            const uRes = await axios.get('/usuarios')
             const users = Array.isArray(uRes.data)? uRes.data : []
-            const foundA = alunos.find(a=> (a.cpf||'') === raw)
-            const foundP = profs.find(p=> (p.cpf||'') === raw)
-            let userId = null
-            if(foundA) userId = foundA.id_usuario
-            else if(foundP) userId = foundP.id_usuario
-            if(userId){ const u = users.find(x=> String(x.id_usuario) === String(userId)); if(u) nomeResp.value = u.nome }
+            const found = users.find(u => ((u.cpf||'') === raw) || ((String(u.cpf||'')).replace(/\D/g,'') === raw))
+            if(found) nomeResp.value = found.nome || ''
           }catch(e){ console.error('lookupResponsavelByCpf', e) }
         }
 
@@ -285,21 +333,15 @@
           // attempt lookup; if not found, warn
           await lookupResponsavelByCpf()
           if(!nomeResp.value){ toast('Usuário com esse CPF não encontrado', true); return }
-          // find usuario id
+          // find usuario id by cpf in usuarios
           try{
             const uRes = await axios.get('/usuarios')
             const users = Array.isArray(uRes.data)? uRes.data : []
-            // find matching usuario by name (best-effort) via alunos/professores mapping
-            const [aRes, pRes] = await Promise.all([axios.get('/alunos'), axios.get('/professores')])
-            const alunos = Array.isArray(aRes.data)? aRes.data : []
-            const profs = Array.isArray(pRes.data)? pRes.data : []
-            const foundA = alunos.find(a=> (a.cpf||'') === raw)
-            const foundP = profs.find(p=> (p.cpf||'') === raw)
-            let userId = foundA ? foundA.id_usuario : (foundP ? foundP.id_usuario : null)
-            if(!userId){ toast('Usuário não encontrado para vincular', true); return }
+            const foundUser = users.find(u => ((u.cpf||'') === raw) || ((String(u.cpf||'')).replace(/\D/g,'') === raw))
+            if(!foundUser){ toast('Usuário não encontrado para vincular', true); return }
+            const userId = foundUser.id_usuario || foundUser.id
             if(pendingResponsaveis.some(p=> String(p.id_usuario) === String(userId))){ toast('Responsável já adicionado', true); return }
-            const userObj = users.find(u=> String(u.id_usuario) === String(userId))
-            pendingResponsaveis.push({ id_usuario: userId, nome: (userObj? userObj.nome : nomeResp.value) })
+            pendingResponsaveis.push({ id_usuario: userId, nome: (foundUser.nome || nomeResp.value), cpf: raw })
             refreshRespList()
             cpfResp.value=''; nomeResp.value=''
           }catch(e){ console.error('add responsavel', e); toast('Erro ao adicionar responsável', true) }
@@ -308,7 +350,8 @@
         // attach responsaveis section (only visible for alunos)
         try{
           const currentTipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
-          responsaveisSection.style.display = currentTipo === 'aluno' ? '' : 'none'
+          // show responsaveis section for alunos or when opening Cadastro de Responsáveis
+          responsaveisSection.style.display = (currentTipo === 'aluno' || (opts && opts.cadastroResponsaveis)) ? '' : 'none'
         }catch(e){}
         area.appendChild(responsaveisSection)
 
@@ -337,8 +380,9 @@
                     }catch(e){}
                   } else if(ed.nome){ nomeInp.value = ed.nome }
 
-              if(ed.cpf) cpfInp.value = ed.cpf
-              if(ed.data_nascimento) dataNascInp.value = ed.data_nascimento
+                // usuario-level cpf/rg now stored on tb_usuarios
+                try{ if(u){ cpfUsuarioInp.value = u.cpf || '' ; rgInp.value = u.rg || '' } }catch(e){}
+                if(ed.data_nascimento) dataNascInp.value = ed.data_nascimento
               if(ed.data_admissao) dataAdmInp.value = ed.data_admissao
 
               // endereco: find first endereco for this usuario
@@ -362,22 +406,38 @@
                       const users = Array.isArray(uRes.data)? uRes.data : []
                       links.forEach(l=>{
                         const u = users.find(x=> String(x.id_usuario) === String(l.tb_usuarios_id_usuario))
-                        pendingResponsaveis.push({ id_usuario: l.tb_usuarios_id_usuario, nome: u? u.nome : String(l.tb_usuarios_id_usuario) })
+                        pendingResponsaveis.push({ id_usuario: l.tb_usuarios_id_usuario, nome: u? u.nome : String(l.tb_usuarios_id_usuario), cpf: l.cpf || '' })
                       })
                       refreshRespList()
                     }catch(e){}
                   }
                 }catch(e){}
               }
+              // prefill aluno extra fields
+              try{ if(ed.nome_mae) nomeMaeInp.value = ed.nome_mae }catch(e){}
+              try{ if(ed.nome_pai) nomePaiInp.value = ed.nome_pai }catch(e){}
+              try{ if(ed.sexo) sexoSel.value = ed.sexo }catch(e){}
             }catch(e){ console.error('prefill unified form', e) }
+            // after prefill, ensure displayed values are uppercase
+            try{
+              const allInputs = area.querySelectorAll('input')
+              allInputs.forEach(i=>{ try{ const t = (i.type||'').toLowerCase(); if(t !== 'password' && t !== 'date' && t !== 'number' && t !== 'checkbox' && t !== 'email') i.value = (i.value||'').toUpperCase() }catch(e){} })
+            }catch(e){}
           })()
         }
 
         const btnSave = document.createElement('button'); btnSave.className='px-3 py-1 bg-schoolBlue-500 text-white rounded mr-2'; btnSave.textContent='Salvar'
         const statusDiv = document.createElement('div'); statusDiv.className = 'mt-3 text-sm'
         btnSave.addEventListener('click', async ()=>{
+          // normalize all non-password/date/number inputs to uppercase before reading values
+          try{
+            const allInputs = area.querySelectorAll('input')
+            allInputs.forEach(i=>{ try{ const t = (i.type||'').toLowerCase(); if(t !== 'password' && t !== 'date' && t !== 'number' && t !== 'checkbox' && t !== 'email') i.value = (i.value||'').toUpperCase() }catch(e){} })
+          }catch(e){}
           const tipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
           const usuarioPayload = { nome: nomeInp.value, email: emailInp.value }
+          try{ if(cpfUsuarioInp && cpfUsuarioInp.value) usuarioPayload.cpf = (cpfUsuarioInp.value||'').replace(/\D/g,'') }catch(e){}
+          try{ if(rgInp && rgInp.value) usuarioPayload.rg = rgInp.value }catch(e){}
           if(senhaInp.value) usuarioPayload.senha = senhaInp.value
           usuarioPayload.ativo = ativoInp.checked
           // include perfis when visible
@@ -410,7 +470,7 @@
             // create or update aluno/professor when applicable
             let createdAlunoId = null
             if(tipo === 'aluno'){
-              const alunoPayload = { id_usuario: id_usuario, cpf: (cpfInp.value||'').replace(/\D/g,''), data_nascimento: dataNascInp.value || null }
+              const alunoPayload = { id_usuario: id_usuario, data_nascimento: dataNascInp.value || null, nome_mae: (typeof nomeMaeInp !== 'undefined' ? nomeMaeInp.value : null), nome_pai: (typeof nomePaiInp !== 'undefined' ? nomePaiInp.value : null), sexo: (typeof sexoSel !== 'undefined' ? sexoSel.value : null) }
               if(opts && opts.editing && (opts.editing.id_aluno || opts.editing.id)){
                 const aid = opts.editing.id_aluno || opts.editing.id
                 try{ await axios.put('/alunos/' + aid, alunoPayload) }catch(e){ console.error('update aluno', e) }
@@ -421,7 +481,7 @@
                 createdAlunoId = aData.id_aluno || aData.id || aData.id_aluno
               }
             } else if(tipo === 'professor'){
-              const profPayload = { id_usuario: id_usuario, cpf: (cpfInp.value||'').replace(/\D/g,''), data_admissao: dataAdmInp.value || null }
+              const profPayload = { id_usuario: id_usuario, data_admissao: dataAdmInp.value || null }
               if(opts && opts.editing && (opts.editing.id_professor || opts.editing.id)){
                 const pid = opts.editing.id_professor || opts.editing.id
                 try{ await axios.put('/professores/' + pid, profPayload) }catch(e){ console.error('update professor', e) }
@@ -455,14 +515,22 @@
             // if there are pending responsaveis and we created an aluno, link them
             if(tipo === 'aluno' && createdAlunoId){
               for(const r of (pendingResponsaveis || [])){
-                try{ await axios.post('/responsaveis', { tb_alunos_id_aluno: createdAlunoId, tb_usuarios_id_usuario: r.id_usuario }) }catch(e){ console.error('link responsavel', e) }
+                try{ await axios.post('/responsaveis', { tb_alunos_id_aluno: createdAlunoId, tb_usuarios_id_usuario: r.id_usuario, cpf: (r.cpf||null) }) }catch(e){ console.error('link responsavel', e) }
               }
             }
 
-            // success
+            // success (contextual message)
             statusDiv.className = 'mt-3 text-sm text-green-600'
-            statusDiv.textContent = 'Cadastro de responsáveis realizado com sucesso.'
-            toast('Cadastro de responsáveis realizado com sucesso')
+            try{
+              const action = isEditing ? 'Atualização' : 'Cadastro'
+              const entityLabel = (tipo === 'aluno') ? 'aluno' : ((tipo === 'professor') ? 'professor' : 'usuário')
+              const successMsg = `${action} de ${entityLabel} realizado com sucesso.`
+              statusDiv.textContent = successMsg
+              toast(successMsg)
+            }catch(e){
+              statusDiv.textContent = 'Operação realizada com sucesso.'
+              toast('Operação realizada com sucesso')
+            }
             // refresh users and relevant lists (use safe wrapper)
             await safeLoadAndRender('usuarios')
             await safeLoadAndRender('alunos')
@@ -577,19 +645,21 @@
           if(source === '/alunos'){
             const users = await fetchAll('/usuarios')
             const uMap = {};
-            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uCpf = {};
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             opts = items.map(it=>{
               const val = it[valueKey] ?? it.id_aluno
-              const label = uMap[it.id_usuario] || it.cpf || String(val)
+              const label = uMap[it.id_usuario] || uCpf[it.id_usuario] || String(val)
               return { value: val, label }
             })
           } else if(source === '/professores'){
             const users = await fetchAll('/usuarios')
             const uMap = {};
-            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uCpf = {};
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             opts = items.map(it=>{
               const val = it[valueKey] ?? it.id_professor
-              const label = uMap[it.id_usuario] || it.cpf || String(val)
+              const label = uMap[it.id_usuario] || uCpf[it.id_usuario] || String(val)
               return { value: val, label }
             })
           } else if(source === '/turma-disciplinas'){
@@ -611,12 +681,13 @@
             const users = await fetchAll('/usuarios')
             const aMap = {}
             alunos.forEach(a=> aMap[a.id_aluno] = a)
-            const uMap = {}
-            users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uMap = {};
+            const uCpf = {};
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             opts = items.map(it=>{
               const val = it[valueKey] ?? it.id_matricula
               const aluno = aMap[it.id_aluno]
-              const label = aluno ? (uMap[aluno.id_usuario] || aluno.cpf) : String(val)
+              const label = aluno ? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || String(val)) : String(val)
               return { value: val, label }
             })
           } else {
@@ -818,24 +889,26 @@
             const avals = Array.isArray(avRes.data)? avRes.data : []
             const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
             const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
-            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uMap = {}; const uCpf = {}
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             const avMap = {}; avals.forEach(av=> avMap[av.id_avaliacao] = av.descricao)
             items = items.map(it => {
               const mat = mMap[it.id_matricula]
               const aluno = mat? aMap[mat.id_aluno] : null
-              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              const nome = aluno? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || '') : ''
               return Object.assign({}, it, { _aluno_nome: nome, _avaliacao_desc: avMap[it.id_avaliacao] || it.id_avaliacao })
             })
             if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._aluno_nome||'').toLowerCase().includes(q)) }
           }
             // client-side enrichment for alunos: resolve usuario name into _nome
             if(entity === 'alunos'){
-              try{
-                const uRes = await axios.get('/usuarios')
-                const users = Array.isArray(uRes.data)? uRes.data : []
-                const uMap = {}
-                users.forEach(u=> uMap[u.id_usuario] = u.nome)
-                items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '' }))
+                try{
+                  const uRes = await axios.get('/usuarios')
+                  const users = Array.isArray(uRes.data)? uRes.data : []
+                  const uMap = {}
+                  const uCpf = {}
+                  users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
+                  items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '', cpf: uCpf[it.id_usuario] || '' }))
                 if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
               }catch(e){ console.error('alunos enrichment', e) }
             }
@@ -850,11 +923,12 @@
             const users = Array.isArray(uRes.data)? uRes.data : []
             const turmas = Array.isArray(tRes.data)? tRes.data : []
             const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
-            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uMap = {}; const uCpf = {}
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
             items = items.map(it => {
               const aluno = aMap[it.id_aluno]
-              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              const nome = aluno? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || '') : ''
               const turmaNome = tMap[it.id_turma] || ''
               return Object.assign({}, it, { _aluno_nome: nome, _turma_nome: turmaNome })
             })
@@ -869,8 +943,10 @@
             const users = Array.isArray(uRes.data)? uRes.data : []
             const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
             const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            const uMapProf = {}; const uCpfProf = {}
+            users.forEach(u=> { uMapProf[u.id_usuario] = u.nome; uCpfProf[u.id_usuario] = u.cpf })
             const pMap = {}
-            profs.forEach(p=>{ const u = users.find(x=> x.id_usuario === p.id_usuario); pMap[p.id_professor] = (u? u.nome : p.cpf) })
+            profs.forEach(p=>{ const u = users.find(x=> x.id_usuario === p.id_usuario); pMap[p.id_professor] = (u? u.nome : (uCpfProf[p.id_usuario]||'')) })
             items = items.map(it => Object.assign({}, it, { _turma_nome: tMap[it.id_turma] || '', _disciplina_nome: dMap[it.id_disciplina] || '', _professor_nome: pMap[it.id_professor] || '' }))
             if(filters.id_turma) items = items.filter(i=> String(i.id_turma) === String(filters.id_turma))
             if(filters.id_disciplina) items = items.filter(i=> String(i.id_disciplina) === String(filters.id_disciplina))
@@ -883,7 +959,8 @@
             const tds = Array.isArray(tdRes.data)? tdRes.data : []
             const turmas = Array.isArray(tRes.data)? tRes.data : []
             const disciplinas = Array.isArray(dRes.data)? dRes.data : []
-            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uMap = {}; const uCpf = {}
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
             const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
             // build assignments per professor
@@ -899,7 +976,7 @@
               const nome = uMap[it.id_usuario] || ''
               const aulas = (assignments[it.id_professor] || []).map(a=> (a.turma && a.disciplina) ? (a.turma + ' — ' + a.disciplina) : (a.turma || a.disciplina)).join('; ')
               const disciplinasIds = (assignments[it.id_professor] || []).map(a=> a.id_disciplina)
-              return Object.assign({}, it, { _nome: nome, _aulas: aulas, _disciplinas_ids: disciplinasIds })
+              return Object.assign({}, it, { _nome: nome, _aulas: aulas, _disciplinas_ids: disciplinasIds, cpf: (uCpf[it.id_usuario] || '') })
             })
             if(filters.professor_name) { const q = String(filters.professor_name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
             if(filters.disciplina_id) { items = items.filter(i=> (i._disciplinas_ids||[]).some(id=> String(id) === String(filters.disciplina_id))) }
@@ -944,14 +1021,15 @@
             const disciplinas = Array.isArray(dRes.data)? dRes.data : []
             const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
             const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
-            const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+            const uMap = {}; const uCpf = {}
+            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
             const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
             const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
             const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
             items = items.map(it => {
               const mat = mMap[it.id_matricula]
               const aluno = mat? aMap[mat.id_aluno] : null
-              const nome = aluno? (uMap[aluno.id_usuario] || aluno.cpf) : ''
+              const nome = aluno? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || '') : ''
               const td = tdMap[it.id_turma_disciplina]
               const turmaNome = td? (tMap[td.id_turma] || '') : ''
               const discNome = td? (dMap[td.id_disciplina] || '') : ''
@@ -1127,6 +1205,13 @@
           input = document.createElement('input'); input.type = meta.type || 'text'; input.className='border rounded px-2 py-1'
           if(meta.step) input.step = meta.step
           input.value = value || ''
+          // apply uppercase display and enforce uppercase on user input for text-like fields
+          try{
+            if(input.type !== 'password' && input.type !== 'date' && input.type !== 'number' && input.type !== 'checkbox' && input.type !== 'email'){
+              input.style.textTransform = 'uppercase'
+              input.addEventListener('input', ()=>{ input.value = input.value.toUpperCase() })
+            }
+          }catch(e){}
         }
         wrapper.appendChild(label); wrapper.appendChild(input)
         return { wrapper, input }
@@ -1202,7 +1287,9 @@
             if(editing && editing[f.name] !== undefined){
               const node = inputs[f.name]
               if(f.type === 'checkbox') node.checked = Boolean(editing[f.name])
-              else node.value = editing[f.name]
+              else {
+                try{ node.value = (editing[f.name] === null || editing[f.name] === undefined) ? '' : String(editing[f.name]).toUpperCase() }catch(e){ node.value = editing[f.name] }
+              }
             }
           }
         }
@@ -1264,6 +1351,8 @@
 
         const btnSave = document.createElement('button'); btnSave.className='px-3 py-1 bg-schoolBlue-500 text-white rounded mr-2'; btnSave.textContent='Salvar'
         btnSave.addEventListener('click', async ()=>{
+          // normalize inputs to uppercase before reading values
+          try{ const allInputs = area.querySelectorAll('input'); allInputs.forEach(i=>{ try{ const t = (i.type||'').toLowerCase(); if(t !== 'password' && t !== 'date' && t !== 'number' && t !== 'checkbox' && t !== 'email') i.value = (i.value||'').toUpperCase() }catch(e){} }) }catch(e){}
           const payload = {}
           meta.fields.forEach(f=>{
             const node = inputs[f.name]

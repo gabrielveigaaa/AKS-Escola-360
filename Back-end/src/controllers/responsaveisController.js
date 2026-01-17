@@ -15,12 +15,12 @@ module.exports = {
   },
   create: async (req, res) => {
     try {
-      const { tb_alunos_id_aluno, tb_usuarios_id_usuario } = req.body;
+      const { tb_alunos_id_aluno, tb_usuarios_id_usuario, cpf } = req.body;
       if (!tb_alunos_id_aluno || !tb_usuarios_id_usuario) return res.status(400).json({ error: 'Missing keys' });
       const aluno = await Aluno.findByPk(tb_alunos_id_aluno);
       const usuario = await Usuario.findByPk(tb_usuarios_id_usuario);
       if (!aluno || !usuario) return res.status(400).json({ error: 'Aluno or Usuario not found' });
-      const created = await Responsavel.create({ tb_alunos_id_aluno, tb_usuarios_id_usuario });
+      const created = await Responsavel.create({ tb_alunos_id_aluno, tb_usuarios_id_usuario, cpf: cpf || null });
       res.status(201).json(created);
     } catch (err) {
       res.status(400).json({ error: err.message });
