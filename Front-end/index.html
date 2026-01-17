@@ -584,6 +584,9 @@
 
     <script>
     (function(){
+      const PAGE_SIZE = 5
+      const pageState = {}
+      const lastLoadedItems = {}
       // enhanced: fetchOptions for FK selects, filters and dynamic selects
       const ENTITIES = {
         'usuarios': { label: 'Usuarios do Sistema', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
@@ -705,6 +708,25 @@
             })
           }
 
+          // fallback: if no opts built but API returned items, try to pick a sensible string field
+          if((!opts || opts.length === 0) && Array.isArray(items) && items.length){
+            console.warn('fetchOptions: no friendly label built for', source, '— applying fallback label extraction')
+            opts = items.map(it => {
+              const val = it[valueKey] ?? it.id ?? Object.values(it)[0]
+              // prefer common label keys, case-insensitive
+              const prefer = ['nome','descricao','email','cpf']
+              let label = ''
+              for(const k of prefer){ if(it[k]){ label = String(it[k]); break } }
+              if(!label){
+                // find first string property
+                for(const k of Object.keys(it)){
+                  if(typeof it[k] === 'string' && it[k].trim()) { label = it[k]; break }
+                }
+              }
+              if(!label) label = String(val)
+              return { value: val, label }
+            })
+          }
           OPTIONS_CACHE[source] = opts
           return opts
         }catch(e){ console.error('fetchOptions', source, e); return [] }
@@ -726,16 +748,20 @@
         const header = document.createElement('div')
         header.className = 'flex items-center justify-between mb-4'
         const h = document.createElement('h2'); h.className='text-2xl font-semibold'; h.textContent = meta.label
-        const btn = document.createElement('button'); btn.className='px-3 py-1 bg-schoolGreen-500 text-white rounded'; btn.textContent='Novo'
-        btn.addEventListener('click', ()=>{
-          // make unified form the default creation UI for alunos/professores and usuarios
-          if(entity === 'alunos') return showUnifiedForm({ tipo: 'aluno' })
-          if(entity === 'professores') return showUnifiedForm({ tipo: 'professor' })
-          if(entity === 'usuarios') return showUnifiedForm({ tipo: 'usuario' })
-          // fallback to existing generic form
-          return showForm(entity)
-        })
-        header.appendChild(h); header.appendChild(btn)
+        header.appendChild(h)
+        // Do not show the 'Novo' button for frequencias — creation handled inline by the frequency UI
+        if(entity !== 'frequencias'){
+          const btn = document.createElement('button'); btn.className='px-3 py-1 bg-schoolGreen-500 text-white rounded'; btn.textContent='Novo'
+          btn.addEventListener('click', ()=>{
+            // make unified form the default creation UI for alunos/professores and usuarios
+            if(entity === 'alunos') return showUnifiedForm({ tipo: 'aluno' })
+            if(entity === 'professores') return showUnifiedForm({ tipo: 'professor' })
+            if(entity === 'usuarios') return showUnifiedForm({ tipo: 'usuario' })
+            // fallback to existing generic form
+            return showForm(entity)
+          })
+          header.appendChild(btn)
+        }
         content.appendChild(header)
 
           // Handle unified registration screen
@@ -841,14 +867,210 @@
           finp.addEventListener('input', debounce(()=>{ filters.name = finp.value || undefined; loadAndRender(entity, filters) }))
         }
         if(entity === 'frequencias'){
-          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
-          const tdSel = document.createElement('select'); tdSel.className='border rounded px-2 py-1 text-sm'
-          tdSel.appendChild(new Option('Todas turmas/disciplinas', ''))
-          const tdOpts = await fetchOptions('/turma-disciplinas','id_turma_disciplina')
-          tdOpts.forEach(o=> tdSel.appendChild(new Option(o.label, o.value)))
-          tdSel.addEventListener('change', ()=>{ filters.id_turma_disciplina = tdSel.value || undefined; loadAndRender(entity, filters) })
-          toolbar.appendChild(tdSel)
+          // New UI: Curso -> Turma -> Disciplina cascaded selects + date and student list
+          const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3 items-end'
+
+          // Curso: derive from turmas by splitting 'nome' on ' — ' and taking prefix
+          const cursoSel = document.createElement('select'); cursoSel.className='border rounded px-2 py-1 text-sm'
+          cursoSel.appendChild(new Option('Todos cursos', ''))
+          // Turma select (specific turma instance)
+          const turmaSel = document.createElement('select'); turmaSel.className='border rounded px-2 py-1 text-sm'
+          turmaSel.appendChild(new Option('Todas turmas', ''))
+          // Disciplina select (filtered by turma)
+          const discSel = document.createElement('select'); discSel.className='border rounded px-2 py-1 text-sm'
+          discSel.appendChild(new Option('Todas disciplinas', ''))
+
+          // Date input for marking presence (hidden) — default to today
+          const dateInp = document.createElement('input'); dateInp.type='hidden'
+          const today = new Date().toISOString().slice(0,10); dateInp.value = today
+
+          // Button to load students for selected turma/disciplina
+          const btnLoadStudents = document.createElement('button'); btnLoadStudents.className='px-2 py-1 bg-schoolBlue-500 text-white rounded text-sm'; btnLoadStudents.textContent = 'Carregar alunos'
+
+          toolbar.appendChild(cursoSel); toolbar.appendChild(turmaSel); toolbar.appendChild(discSel); toolbar.appendChild(btnLoadStudents)
+          // keep hidden date input in the toolbar (no visual impact)
+          toolbar.appendChild(dateInp)
           content.appendChild(toolbar)
+
+          // container to render students and save action
+          const studentsContainer = document.createElement('div'); studentsContainer.className = 'bg-white p-4 rounded shadow mt-3'; studentsContainer.id = 'frequencias-students'; content.appendChild(studentsContainer)
+
+          // populate curso and turma selects
+          try{
+            const rawTurmas = await axios.get('/turmas')
+            const turmas = Array.isArray(rawTurmas.data)? rawTurmas.data : []
+            // build course list by splitting turma.nome on ' — ' if present
+            const cursoMap = {}
+            turmas.forEach(t=>{
+              const nome = t.nome || ''
+              const parts = nome.split(' — ').map(p=>p.trim())
+              const curso = parts.length > 1 ? parts[0] : nome
+              if(!cursoMap[curso]) cursoMap[curso] = []
+              cursoMap[curso].push(t)
+            })
+            Object.keys(cursoMap).sort().forEach(c=> cursoSel.appendChild(new Option(c,c)))
+            // populate turmaSel initially with all turmas
+            turmas.forEach(t=> turmaSel.appendChild(new Option(t.nome, t.id_turma)))
+          }catch(e){ console.error('populate turmas for frequencias', e) }
+
+          // when curso selected, filter turmaSel options
+          cursoSel.addEventListener('change', ()=>{
+            const curso = cursoSel.value || ''
+            // repopulate turmaSel
+            turmaSel.innerHTML = ''
+            turmaSel.appendChild(new Option('Todas turmas',''))
+            axios.get('/turmas').then(r=>{
+              const turmas = Array.isArray(r.data)? r.data : []
+              turmas.filter(t=>{
+                if(!curso) return true
+                const parts = (t.nome||'').split(' — ').map(p=>p.trim())
+                const c = parts.length > 1 ? parts[0] : t.nome
+                return String(c) === String(curso)
+              }).forEach(t=> turmaSel.appendChild(new Option(t.nome, t.id_turma)))
+            }).catch(()=>{})
+          })
+
+          // when turma selected, populate discipline select from turma-disciplinas
+          async function refreshDisciplinesForTurma(turmaId){
+            discSel.innerHTML = ''
+            discSel.appendChild(new Option('Todas disciplinas',''))
+            if(!turmaId) return
+            try{
+              const tdRes = await axios.get('/turma-disciplinas')
+              const tds = Array.isArray(tdRes.data)? tdRes.data : []
+              // filter by id_turma and build labels using disciplinas
+              const discIds = tds.filter(td=> String(td.id_turma) === String(turmaId)).map(td=> td.id_disciplina)
+              if(!discIds.length) return
+              const dRes = await axios.get('/disciplinas')
+              const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+              disciplinas.filter(d=> discIds.includes(d.id_disciplina)).forEach(d=> discSel.appendChild(new Option(d.nome, d.id_disciplina)))
+            }catch(e){ console.error('refreshDisciplinesForTurma', e) }
+          }
+
+          turmaSel.addEventListener('change', ()=> refreshDisciplinesForTurma(turmaSel.value || ''))
+
+          // helper: load students for selected turma (and optionally disciplina)
+          async function loadStudentsForSelection(){
+            studentsContainer.innerHTML = 'Carregando alunos...'
+            const turmaId = turmaSel.value || ''
+            const discId = discSel.value || ''
+            const tdId = (async ()=>{
+              if(!turmaId || !discId) return null
+              try{
+                const tdRes = await axios.get('/turma-disciplinas')
+                const tds = Array.isArray(tdRes.data)? tdRes.data : []
+                const found = tds.find(x=> String(x.id_turma) === String(turmaId) && String(x.id_disciplina) === String(discId))
+                return found? (found.id_turma_disciplina || found.id) : null
+              }catch(e){ return null }
+            })()
+            const resolvedTdId = await tdId
+            try{
+              // fetch matriculas for the turma
+              const [mRes, aRes, uRes] = await Promise.all([axios.get('/matriculas', { params: { id_turma: turmaId } }), axios.get('/alunos'), axios.get('/usuarios')])
+              const matriculas = Array.isArray(mRes.data)? mRes.data : []
+              const alunos = Array.isArray(aRes.data)? aRes.data : []
+              const users = Array.isArray(uRes.data)? uRes.data : []
+              const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+              const uMap = {}; users.forEach(u=> uMap[u.id_usuario] = u.nome)
+
+              // filter matriculas by turmaId (backend may return all matriculas)
+              const filteredMats = (turmaId && String(turmaId) !== '') ? matriculas.filter(m => String(m.id_turma) === String(turmaId)) : matriculas
+              // build list of students from (filtered) matriculas
+              const students = filteredMats.map(m=>{
+                const aluno = aMap[m.id_aluno]
+                const nome = aluno? (uMap[aluno.id_usuario] || '') : ''
+                return { id_matricula: m.id_matricula, id_aluno: m.id_aluno, nome }
+              })
+
+              // render students with checkboxes
+              studentsContainer.innerHTML = ''
+              const title = document.createElement('h3'); title.className = 'font-semibold mb-2'; title.textContent = 'Alunos matriculados (' + students.length + ')'
+              studentsContainer.appendChild(title)
+              const form = document.createElement('div'); form.className = 'space-y-2'
+              students.forEach(s=>{
+                const row = document.createElement('div'); row.className = 'flex items-center justify-between border rounded px-2 py-1 student-row'
+                row.dataset.id_matricula = s.id_matricula
+                const left = document.createElement('div'); left.textContent = s.nome || ('Aluno #' + s.id_aluno)
+                const right = document.createElement('div'); right.className = 'flex items-center gap-3'
+
+                // create three checkboxes: Presença, Falta, Justificado
+                const statuses = [ ['PRESENTE','Presença'], ['FALTA','Falta'], ['JUSTIFICADO','Justificado'] ]
+                statuses.forEach(st=>{
+                  const wrap = document.createElement('label'); wrap.className = 'flex items-center gap-1 text-sm'
+                  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.id_matricula = s.id_matricula; cb.dataset.status = st[0]
+                  // default to PRESENTE checked
+                  if(st[0] === 'PRESENTE') cb.checked = true
+                  // when one checkbox is checked, uncheck the others for the same student
+                  cb.addEventListener('change', (e)=>{
+                    try{
+                      if(cb.checked){
+                        const siblings = right.querySelectorAll('input[data-id_matricula="' + s.id_matricula + '"]')
+                        siblings.forEach(si=>{ if(si !== cb) si.checked = false })
+                      } else {
+                        // prevent all unchecked: keep at least one selected (if user unchecks the last, revert to PRESENTE)
+                        const any = Array.from(right.querySelectorAll('input[data-id_matricula="' + s.id_matricula + '"]')).some(x=> x.checked)
+                        if(!any){ // re-check PRESENCE
+                          const pres = right.querySelector('input[data-status="PRESENTE"][data-id_matricula="' + s.id_matricula + '"]')
+                          if(pres) pres.checked = true
+                        }
+                      }
+                    }catch(e){}
+                  })
+                  const span = document.createElement('span'); span.textContent = st[1]
+                  wrap.appendChild(cb); wrap.appendChild(span); right.appendChild(wrap)
+                })
+
+                row.appendChild(left); row.appendChild(right); form.appendChild(row)
+              })
+              studentsContainer.appendChild(form)
+
+              // save button
+              const saveBtn = document.createElement('button'); saveBtn.className = 'mt-3 px-3 py-1 bg-schoolGreen-500 text-white rounded'; saveBtn.textContent = 'Salvar presença'
+              const status = document.createElement('div'); status.className = 'mt-2 text-sm text-slate-600'
+              saveBtn.addEventListener('click', async ()=>{
+                // recompute turma-disciplina id at click time to reflect latest selects
+                const currentTurmaId = turmaSel.value || ''
+                const currentDiscId = discSel.value || ''
+                let currentTdId = null
+                if(currentTurmaId && currentDiscId){
+                  try{
+                    const tdResNow = await axios.get('/turma-disciplinas')
+                    const tdsNow = Array.isArray(tdResNow.data)? tdResNow.data : []
+                    const foundNow = tdsNow.find(x=> String(x.id_turma) === String(currentTurmaId) && String(x.id_disciplina) === String(currentDiscId))
+                    currentTdId = foundNow? (foundNow.id_turma_disciplina || foundNow.id) : null
+                  }catch(e){ console.error('recompute td id', e) }
+                }
+                if(!currentTdId){ toast('Selecione uma disciplina válida para salvar presença', true); return }
+                saveBtn.disabled = true; saveBtn.textContent = 'Salvando...'
+                try{
+                  // iterate student rows and post frequencia for each (read selected status)
+                  const rows = form.querySelectorAll('.student-row')
+                  const dateVal = dateInp.value || new Date().toISOString().slice(0,10)
+                  const promises = []
+                  rows.forEach(r=>{
+                    const mid = r.dataset.id_matricula
+                    const checked = r.querySelector('input[type="checkbox"]:checked')
+                    const statusVal = checked ? (checked.dataset.status || 'PRESENTE') : 'PRESENTE'
+                    const payload = { id_matricula: mid, id_turma_disciplina: currentTdId, data: dateVal, status: statusVal }
+                    promises.push(axios.post('/frequencias', payload).catch(e=>{ console.error('post freq', e); return null }))
+                  })
+                  await Promise.all(promises)
+                  status.textContent = 'Presenças salvas.'; status.className = 'mt-2 text-sm text-green-600'
+                  toast('Presenças salvas')
+                  // refresh main list
+                  await loadAndRender('frequencias')
+                }catch(e){ console.error('save presences', e); status.textContent = 'Erro ao salvar'; status.className = 'mt-2 text-sm text-red-600'; toast('Erro ao salvar', true) }
+                finally{ saveBtn.disabled = false; saveBtn.textContent = 'Salvar presença' }
+              })
+              studentsContainer.appendChild(saveBtn); studentsContainer.appendChild(status)
+
+            }catch(e){ console.error('loadStudentsForSelection', e); studentsContainer.textContent = 'Erro ao carregar alunos' }
+          }
+
+          // wire button to load students
+          btnLoadStudents.addEventListener('click', loadStudentsForSelection)
+          // also refresh disciplines when the page loads if turma selected
+          if(turmaSel.value) refreshDisciplinesForTurma(turmaSel.value)
         }
         if(entity === 'professores'){
           const toolbar = document.createElement('div'); toolbar.className='flex gap-3 mb-3'
@@ -882,35 +1104,68 @@
           let items = Array.isArray(res.data) ? res.data : []
           // client-side enrichment and filtering for notas
           if(entity === 'notas'){
-            const [mRes, aRes, uRes, avRes] = await Promise.all([axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios'), axios.get('/avaliacoes')])
-            const matriculas = Array.isArray(mRes.data)? mRes.data : []
-            const alunos = Array.isArray(aRes.data)? aRes.data : []
-            const users = Array.isArray(uRes.data)? uRes.data : []
-            const avals = Array.isArray(avRes.data)? avRes.data : []
-            const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
-            const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
-            const uMap = {}; const uCpf = {}
-            users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
-            const avMap = {}; avals.forEach(av=> avMap[av.id_avaliacao] = av.descricao)
-            items = items.map(it => {
-              const mat = mMap[it.id_matricula]
-              const aluno = mat? aMap[mat.id_aluno] : null
-              const nome = aluno? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || '') : ''
-              return Object.assign({}, it, { _aluno_nome: nome, _avaliacao_desc: avMap[it.id_avaliacao] || it.id_avaliacao })
-            })
+            const [mRes, aRes, uRes, avRes, tdRes, tRes, dRes] = await Promise.all([axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios'), axios.get('/avaliacoes'), axios.get('/turma-disciplinas'), axios.get('/turmas'), axios.get('/disciplinas')])
+              const matriculas = Array.isArray(mRes.data)? mRes.data : []
+              const alunos = Array.isArray(aRes.data)? aRes.data : []
+              const users = Array.isArray(uRes.data)? uRes.data : []
+              const avals = Array.isArray(avRes.data)? avRes.data : []
+              const tds = Array.isArray(tdRes.data)? tdRes.data : []
+              const turmas = Array.isArray(tRes.data)? tRes.data : []
+              const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+              const mMap = {}; matriculas.forEach(m=> mMap[m.id_matricula] = m)
+              const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+              const uMap = {}; const uCpf = {}
+              users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
+              const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+              const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+              const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+              const avMap = {}; avals.forEach(av=> avMap[av.id_avaliacao] = av)
+              items = items.map(it => {
+                const mat = mMap[it.id_matricula]
+                const aluno = mat? aMap[mat.id_aluno] : null
+                const nome = aluno? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || '') : ''
+                const av = avMap[it.id_avaliacao]
+                let tdLabel = ''
+                if(av && av.id_turma_disciplina){
+                  const td = tdMap[av.id_turma_disciplina]
+                  const turmaNome = td? (tMap[td.id_turma] || '') : ''
+                  const discNome = td? (dMap[td.id_disciplina] || '') : ''
+                  tdLabel = (turmaNome && discNome) ? (turmaNome + ' — ' + discNome) : (turmaNome || discNome || '')
+                }
+                return Object.assign({}, it, { _aluno_nome: nome, _avaliacao_desc: (av && av.descricao) ? av.descricao : '', _turma_disciplina: tdLabel })
+              })
             if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._aluno_nome||'').toLowerCase().includes(q)) }
           }
-            // client-side enrichment for alunos: resolve usuario name into _nome
+            // client-side enrichment for alunos: resolve usuario name into _nome and find responsavel names
             if(entity === 'alunos'){
                 try{
-                  const uRes = await axios.get('/usuarios')
+                  const [uRes, rRes] = await Promise.all([axios.get('/usuarios'), axios.get('/responsaveis')])
                   const users = Array.isArray(uRes.data)? uRes.data : []
+                  const responsaveis = Array.isArray(rRes.data)? rRes.data : []
                   const uMap = {}
-                  const uCpf = {}
-                  users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
-                  items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '', cpf: uCpf[it.id_usuario] || '' }))
-                if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
-              }catch(e){ console.error('alunos enrichment', e) }
+                  users.forEach(u=> { try{ const key = String(u.id_usuario || u.id || u.id_usuario); uMap[key] = u.nome || (u.cpf || '') }catch(e){} })
+                  // build map alunoId -> [usuarioId]
+                  const respMap = {}
+                  responsaveis.forEach(r=>{
+                    try{
+                      const aid = r.tb_alunos_id_aluno || r.tbAlunosIdAluno || r.id_aluno || r.alunoId || r['tb_alunos_id_aluno']
+                      const uid = r.tb_usuarios_id_usuario || r.tbUsuariosIdUsuario || r.id_usuario || r.usuarioId || r['tb_usuarios_id_usuario']
+                      if(!aid) return
+                      const aKey = String(aid)
+                      const uKey = String(uid)
+                      if(!respMap[aKey]) respMap[aKey] = []
+                      respMap[aKey].push(uKey)
+                    }catch(e){}
+                  })
+                  items = items.map(it=>{
+                    try{
+                      const aKey = String(it.id_aluno || it.id)
+                      const nomes = (respMap[aKey] || []).map(uid=> (uMap[uid] || '') ).filter(Boolean)
+                      return Object.assign({}, it, { _nome: (uMap[String(it.id_usuario)] || ''), _responsavel_nome: nomes.join('; ') })
+                    }catch(e){ return Object.assign({}, it, { _nome: '', _responsavel_nome: '' }) }
+                  })
+                  if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
+                }catch(e){ console.error('alunos enrichment', e) }
             }
             // client-side filtering for usuarios (by nome)
             if(entity === 'usuarios'){
@@ -1038,6 +1293,9 @@
             })
             if(filters.id_turma_disciplina) items = items.filter(i=> String(i.id_turma_disciplina) === String(filters.id_turma_disciplina))
           }
+          // store enriched items for pagination and reset page when filters change
+          lastLoadedItems[entity] = items
+          pageState[entity] = 1
           renderTable(entity, items)
         }catch(err){
           wrap.textContent = 'Erro ao carregar — ver console'
@@ -1050,10 +1308,19 @@
         wrap.innerHTML = ''
         if(!items.length){ wrap.appendChild(document.createTextNode('Nenhum registro encontrado.')); return }
 
+        // pagination state
+        const totalItems = items.length
+        const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+        if(!pageState[entity]) pageState[entity] = 1
+        if(pageState[entity] > totalPages) pageState[entity] = totalPages
+        const currentPage = pageState[entity]
+        const startIdx = (currentPage - 1) * PAGE_SIZE
+        const pagedItems = items.slice(startIdx, startIdx + PAGE_SIZE)
+
         // custom columns: notas and turma-disciplinas have special views
         let keys = Object.keys(items[0])
         if(entity === 'notas'){
-          keys = ['id_nota','id_avaliacao','_aluno_nome','nota']
+          keys = ['_turma_disciplina','_aluno_nome','nota']
         }
         if(entity === 'turma-disciplinas'){
           keys = ['_turma_nome','_disciplina_nome','_professor_nome']
@@ -1068,7 +1335,7 @@
           keys = ['_aluno_nome','_turma_nome','data_matricula']
         }
         if(entity === 'alunos'){
-          keys = ['_nome','cpf','data_nascimento']
+          keys = ['_nome','_responsavel_nome','data_nascimento']
         }
         if(entity === 'professores'){
           keys = ['_nome','_aulas','cpf','data_admissao']
@@ -1087,6 +1354,7 @@
         keys.forEach(k=>{ const th = document.createElement('th'); th.className='p-2';
           let title = k
           if(entity === 'notas' && k === 'id_avaliacao') title = 'Avaliação'
+          if(entity === 'notas' && k === '_turma_disciplina') title = 'Turma — Disciplina'
           if(entity === 'notas' && k === '_aluno_nome') title = 'Nome do Aluno'
           if(entity === 'turma-disciplinas' && k === '_turma_nome') title = 'Turma'
           if(entity === 'turma-disciplinas' && k === '_disciplina_nome') title = 'Disciplina'
@@ -1103,7 +1371,7 @@
           if(entity === 'avaliacoes' && k === 'data_avaliacao') title = 'Data Avaliação'
           if(entity === 'avaliacoes' && k === 'peso') title = 'Peso'
           if(entity === 'alunos' && k === '_nome') title = 'Nome'
-          if(entity === 'alunos' && k === 'cpf') title = 'CPF'
+          if(entity === 'alunos' && k === '_responsavel_nome') title = 'Responsável'
           if(entity === 'alunos' && k === 'data_nascimento') title = 'Data Nasc.'
           if(entity === 'professores' && k === '_nome') title = 'Nome'
           if(entity === 'professores' && k === '_aulas') title = 'Turmas/Disciplinas'
@@ -1124,14 +1392,15 @@
         thead.appendChild(trh); table.appendChild(thead)
 
         const tbody = document.createElement('tbody')
-        items.forEach(it=>{
+        pagedItems.forEach(it=>{
           const tr = document.createElement('tr'); tr.className='border-b hover:bg-slate-50'
           keys.forEach(k=>{
             const td=document.createElement('td'); td.className='p-2'
             let text = ''
             if(entity === 'notas'){
-              if(k === 'id_avaliacao') text = it._avaliacao_desc || ''
+              if(k === '_turma_disciplina') text = it._turma_disciplina || ''
               else if(k === '_aluno_nome') text = it._aluno_nome || ''
+              else if(k === 'nota') text = (it.nota === null || it.nota === undefined) ? '' : String(it.nota)
               else text = (it[k] === null || it[k] === undefined) ? '' : String(it[k])
             } else if(entity === 'turma-disciplinas'){
               if(k === '_turma_nome') text = it._turma_nome || ''
@@ -1153,7 +1422,7 @@
               else if(k === 'data_admissao') text = it.data_admissao || ''
             } else if(entity === 'alunos'){
               if(k === '_nome') text = it._nome || ''
-              else if(k === 'cpf') text = it.cpf || ''
+              else if(k === '_responsavel_nome') text = it._responsavel_nome || ''
               else if(k === 'data_nascimento') text = it.data_nascimento || ''
             } else if(entity === 'disciplinas'){
               if(k === 'nome') text = it.nome || ''
@@ -1179,6 +1448,19 @@
         })
         table.appendChild(tbody)
         wrap.appendChild(table)
+
+        // pagination controls
+        if(totalPages > 1){
+          const pagWrap = document.createElement('div'); pagWrap.className = 'mt-2 flex items-center justify-between'
+          const left = document.createElement('div')
+          const prev = document.createElement('button'); prev.className='px-2 py-1 mr-2 bg-slate-100 rounded'; prev.textContent='Anterior'; prev.disabled = (currentPage <= 1)
+          prev.addEventListener('click', ()=>{ pageState[entity] = Math.max(1, pageState[entity]-1); renderTable(entity, lastLoadedItems[entity] || items) })
+          const next = document.createElement('button'); next.className='px-2 py-1 bg-slate-100 rounded'; next.textContent='Próximo'; next.disabled = (currentPage >= totalPages)
+          next.addEventListener('click', ()=>{ pageState[entity] = Math.min(totalPages, pageState[entity]+1); renderTable(entity, lastLoadedItems[entity] || items) })
+          left.appendChild(prev); left.appendChild(next)
+          const right = document.createElement('div'); right.className='text-sm text-slate-600'; right.textContent = 'Página ' + currentPage + ' de ' + totalPages + ' — ' + totalItems + ' registros'
+          pagWrap.appendChild(left); pagWrap.appendChild(right); wrap.appendChild(pagWrap)
+        }
       }
 
       function buildField(meta, value){
@@ -1294,6 +1576,39 @@
           }
         }
 
+        // Special handling for `notas`: ensure `id_avaliacao` shows friendly labels including Turma — Disciplina
+        if(entity === 'notas'){
+          try{
+            const avRes = await axios.get('/avaliacoes')
+            const tdRes = await axios.get('/turma-disciplinas')
+            const tRes = await axios.get('/turmas')
+            const dRes = await axios.get('/disciplinas')
+            const avals = Array.isArray(avRes.data)? avRes.data : []
+            const tds = Array.isArray(tdRes.data)? tdRes.data : []
+            const turmas = Array.isArray(tRes.data)? tRes.data : []
+            const disciplinas = Array.isArray(dRes.data)? dRes.data : []
+            const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
+            const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
+            const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+            const sel = inputs['id_avaliacao']
+            if(sel){
+              sel.innerHTML = ''
+              sel.appendChild(new Option('Selecione uma avaliação',''))
+              avals.forEach(av=>{
+                const td = tdMap[av.id_turma_disciplina]
+                const turmaNome = td? (tMap[td.id_turma] || '') : ''
+                const discNome = td? (dMap[td.id_disciplina] || '') : ''
+                const tdLabel = (turmaNome && discNome) ? (turmaNome + ' — ' + discNome) : (turmaNome || discNome || '')
+                const label = (av.descricao ? av.descricao : '') + (tdLabel ? (' — ' + tdLabel) : '')
+                const val = av.id_avaliacao || av.id
+                sel.appendChild(new Option(label || String(val), val))
+              })
+              // if editing, try to set the existing value
+              if(editing && editing.id_avaliacao) try{ sel.value = editing.id_avaliacao }catch(e){}
+            }
+          }catch(e){ console.error('populate notas avaliacao select', e) }
+        }
+
         // For alunos: if a pending id was set before options existed, ensure it survives later input changes
         if(entity === 'alunos'){
           const userSel = inputs['id_usuario']
@@ -1314,6 +1629,19 @@
               }
             })
           }
+        }
+
+        // For matriculas: when creating a new matricula, default the date to today and disable the field
+        if(entity === 'matriculas' && !editing){
+          try{
+            const dateNode = inputs['data_matricula']
+            if(dateNode){
+              const today = new Date();
+              const iso = today.toISOString().slice(0,10)
+              dateNode.value = iso
+              dateNode.disabled = true
+            }
+          }catch(e){ console.warn('Could not set default data_matricula', e) }
         }
 
         // dynamic behavior for frequencias form: when turma-disciplina changes, limit matricula options to that turma
