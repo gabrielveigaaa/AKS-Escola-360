@@ -40,8 +40,65 @@ async function run(){
       }
     }
 
+    // --- disciplinas (área de Tecnologia)
+    const disciplinasList = [
+      'Algoritmos e Lógica de Programação',
+      'Estruturas de Dados',
+      'Banco de Dados',
+      'Desenvolvimento Web',
+      'Programação em JavaScript',
+      'DevOps',
+      'Redes de Computadores',
+      'Segurança da Informação',
+      'Inteligência Artificial',
+      'Desenvolvimento Mobile',
+      'UX/UI'
+    ]
+    const disciplinaMap = {}
+    for(const nome of disciplinasList){
+      const [d] = await db.Disciplina.findOrCreate({ where:{ nome }, defaults:{ nome, carga_horaria: 60 }, transaction: t })
+      disciplinaMap[nome] = d
+    }
+
+    // --- turmas (uma ou duas por curso)
+    const cursos = ['Desenvolvimento Web','Desenvolvimento Mobile','Redes de Computadores','Segurança da Informação','Inteligência Artificial','DevOps']
+    const turnos = ['MANHA','TARDE','NOITE']
+    const turmas = []
+    let turnoIdx = 0
+    for(const curso of cursos){
+      for(const sufixo of ['A','B']){
+        const nome = curso + ' — Turma ' + sufixo
+        const ano = 2026
+        const turno = turnos[turnoIdx % turnos.length]
+        turnoIdx++
+        const [tm] = await db.Turma.findOrCreate({ where:{ nome, ano_letivo: ano }, defaults:{ nome, ano_letivo: ano, turno, ativa:true }, transaction: t })
+        turmas.push(tm)
+      }
+    }
+
+    // --- vincular turma-disciplinas: para cada turma, escolher 4-6 disciplinas aleatórias e atribuir um professor existente
+    const profs = await db.Professor.findAll({ transaction: t })
+    const professorIds = profs.map(p => p.id_professor)
+    function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+    const disciplinaObjs = Object.values(disciplinaMap)
+    if(professorIds.length === 0){ console.warn('Nenhum professor encontrado — pulando vinculação de turma-disciplinas') }
+    for(const tm of turmas){
+      // pick 4..6 unique disciplines
+      const count = Math.min(disciplinaObjs.length, 4 + Math.floor(Math.random()*3))
+      const chosen = []
+      while(chosen.length < count){
+        const cand = randChoice(disciplinaObjs)
+        if(!chosen.includes(cand)) chosen.push(cand)
+      }
+      for(const d of chosen){
+        const profId = (professorIds.length>0) ? randChoice(professorIds) : null
+        if(!profId) continue
+        await db.TurmaDisciplina.findOrCreate({ where:{ id_turma: tm.id_turma, id_disciplina: d.id_disciplina }, defaults:{ id_turma: tm.id_turma, id_disciplina: d.id_disciplina, id_professor: profId }, transaction: t })
+      }
+    }
+
     await t.commit();
-    console.log('Seed completa');
+    console.log('Seed completa — disciplinas, turmas e vinculações adicionadas');
     process.exit(0);
   }catch(e){ await t.rollback(); console.error(e); process.exit(1) }
 }

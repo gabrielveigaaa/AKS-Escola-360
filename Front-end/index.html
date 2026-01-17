@@ -584,6 +584,9 @@
 
     <script>
     (function(){
+      const PAGE_SIZE = 5
+      const pageState = {}
+      const lastLoadedItems = {}
       // enhanced: fetchOptions for FK selects, filters and dynamic selects
       const ENTITIES = {
         'usuarios': { label: 'Usuarios do Sistema', fields: [ {name:'nome',label:'Nome',type:'text'},{name:'email',label:'Email',type:'email'},{name:'senha',label:'Senha',type:'password'},{name:'ativo',label:'Ativo',type:'checkbox'} ] },
@@ -705,6 +708,25 @@
             })
           }
 
+          // fallback: if no opts built but API returned items, try to pick a sensible string field
+          if((!opts || opts.length === 0) && Array.isArray(items) && items.length){
+            console.warn('fetchOptions: no friendly label built for', source, '— applying fallback label extraction')
+            opts = items.map(it => {
+              const val = it[valueKey] ?? it.id ?? Object.values(it)[0]
+              // prefer common label keys, case-insensitive
+              const prefer = ['nome','descricao','email','cpf']
+              let label = ''
+              for(const k of prefer){ if(it[k]){ label = String(it[k]); break } }
+              if(!label){
+                // find first string property
+                for(const k of Object.keys(it)){
+                  if(typeof it[k] === 'string' && it[k].trim()) { label = it[k]; break }
+                }
+              }
+              if(!label) label = String(val)
+              return { value: val, label }
+            })
+          }
           OPTIONS_CACHE[source] = opts
           return opts
         }catch(e){ console.error('fetchOptions', source, e); return [] }
@@ -900,17 +922,36 @@
             })
             if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._aluno_nome||'').toLowerCase().includes(q)) }
           }
-            // client-side enrichment for alunos: resolve usuario name into _nome
+            // client-side enrichment for alunos: resolve usuario name into _nome and find responsavel names
             if(entity === 'alunos'){
                 try{
-                  const uRes = await axios.get('/usuarios')
+                  const [uRes, rRes] = await Promise.all([axios.get('/usuarios'), axios.get('/responsaveis')])
                   const users = Array.isArray(uRes.data)? uRes.data : []
+                  const responsaveis = Array.isArray(rRes.data)? rRes.data : []
                   const uMap = {}
-                  const uCpf = {}
-                  users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
-                  items = items.map(it=> Object.assign({}, it, { _nome: uMap[it.id_usuario] || '', cpf: uCpf[it.id_usuario] || '' }))
-                if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
-              }catch(e){ console.error('alunos enrichment', e) }
+                  users.forEach(u=> { try{ const key = String(u.id_usuario || u.id || u.id_usuario); uMap[key] = u.nome || (u.cpf || '') }catch(e){} })
+                  // build map alunoId -> [usuarioId]
+                  const respMap = {}
+                  responsaveis.forEach(r=>{
+                    try{
+                      const aid = r.tb_alunos_id_aluno || r.tbAlunosIdAluno || r.id_aluno || r.alunoId || r['tb_alunos_id_aluno']
+                      const uid = r.tb_usuarios_id_usuario || r.tbUsuariosIdUsuario || r.id_usuario || r.usuarioId || r['tb_usuarios_id_usuario']
+                      if(!aid) return
+                      const aKey = String(aid)
+                      const uKey = String(uid)
+                      if(!respMap[aKey]) respMap[aKey] = []
+                      respMap[aKey].push(uKey)
+                    }catch(e){}
+                  })
+                  items = items.map(it=>{
+                    try{
+                      const aKey = String(it.id_aluno || it.id)
+                      const nomes = (respMap[aKey] || []).map(uid=> (uMap[uid] || '') ).filter(Boolean)
+                      return Object.assign({}, it, { _nome: (uMap[String(it.id_usuario)] || ''), _responsavel_nome: nomes.join('; ') })
+                    }catch(e){ return Object.assign({}, it, { _nome: '', _responsavel_nome: '' }) }
+                  })
+                  if(filters.name){ const q = String(filters.name).toLowerCase(); items = items.filter(i=> (i._nome||'').toLowerCase().includes(q)) }
+                }catch(e){ console.error('alunos enrichment', e) }
             }
             // client-side filtering for usuarios (by nome)
             if(entity === 'usuarios'){
@@ -1038,6 +1079,9 @@
             })
             if(filters.id_turma_disciplina) items = items.filter(i=> String(i.id_turma_disciplina) === String(filters.id_turma_disciplina))
           }
+          // store enriched items for pagination and reset page when filters change
+          lastLoadedItems[entity] = items
+          pageState[entity] = 1
           renderTable(entity, items)
         }catch(err){
           wrap.textContent = 'Erro ao carregar — ver console'
@@ -1049,6 +1093,15 @@
         const wrap = document.getElementById('list-wrap')
         wrap.innerHTML = ''
         if(!items.length){ wrap.appendChild(document.createTextNode('Nenhum registro encontrado.')); return }
+
+        // pagination state
+        const totalItems = items.length
+        const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+        if(!pageState[entity]) pageState[entity] = 1
+        if(pageState[entity] > totalPages) pageState[entity] = totalPages
+        const currentPage = pageState[entity]
+        const startIdx = (currentPage - 1) * PAGE_SIZE
+        const pagedItems = items.slice(startIdx, startIdx + PAGE_SIZE)
 
         // custom columns: notas and turma-disciplinas have special views
         let keys = Object.keys(items[0])
@@ -1068,7 +1121,7 @@
           keys = ['_aluno_nome','_turma_nome','data_matricula']
         }
         if(entity === 'alunos'){
-          keys = ['_nome','cpf','data_nascimento']
+          keys = ['_nome','_responsavel_nome','data_nascimento']
         }
         if(entity === 'professores'){
           keys = ['_nome','_aulas','cpf','data_admissao']
@@ -1103,7 +1156,7 @@
           if(entity === 'avaliacoes' && k === 'data_avaliacao') title = 'Data Avaliação'
           if(entity === 'avaliacoes' && k === 'peso') title = 'Peso'
           if(entity === 'alunos' && k === '_nome') title = 'Nome'
-          if(entity === 'alunos' && k === 'cpf') title = 'CPF'
+          if(entity === 'alunos' && k === '_responsavel_nome') title = 'Responsável'
           if(entity === 'alunos' && k === 'data_nascimento') title = 'Data Nasc.'
           if(entity === 'professores' && k === '_nome') title = 'Nome'
           if(entity === 'professores' && k === '_aulas') title = 'Turmas/Disciplinas'
@@ -1124,7 +1177,7 @@
         thead.appendChild(trh); table.appendChild(thead)
 
         const tbody = document.createElement('tbody')
-        items.forEach(it=>{
+        pagedItems.forEach(it=>{
           const tr = document.createElement('tr'); tr.className='border-b hover:bg-slate-50'
           keys.forEach(k=>{
             const td=document.createElement('td'); td.className='p-2'
@@ -1153,7 +1206,7 @@
               else if(k === 'data_admissao') text = it.data_admissao || ''
             } else if(entity === 'alunos'){
               if(k === '_nome') text = it._nome || ''
-              else if(k === 'cpf') text = it.cpf || ''
+              else if(k === '_responsavel_nome') text = it._responsavel_nome || ''
               else if(k === 'data_nascimento') text = it.data_nascimento || ''
             } else if(entity === 'disciplinas'){
               if(k === 'nome') text = it.nome || ''
@@ -1179,6 +1232,19 @@
         })
         table.appendChild(tbody)
         wrap.appendChild(table)
+
+        // pagination controls
+        if(totalPages > 1){
+          const pagWrap = document.createElement('div'); pagWrap.className = 'mt-2 flex items-center justify-between'
+          const left = document.createElement('div')
+          const prev = document.createElement('button'); prev.className='px-2 py-1 mr-2 bg-slate-100 rounded'; prev.textContent='Anterior'; prev.disabled = (currentPage <= 1)
+          prev.addEventListener('click', ()=>{ pageState[entity] = Math.max(1, pageState[entity]-1); renderTable(entity, lastLoadedItems[entity] || items) })
+          const next = document.createElement('button'); next.className='px-2 py-1 bg-slate-100 rounded'; next.textContent='Próximo'; next.disabled = (currentPage >= totalPages)
+          next.addEventListener('click', ()=>{ pageState[entity] = Math.min(totalPages, pageState[entity]+1); renderTable(entity, lastLoadedItems[entity] || items) })
+          left.appendChild(prev); left.appendChild(next)
+          const right = document.createElement('div'); right.className='text-sm text-slate-600'; right.textContent = 'Página ' + currentPage + ' de ' + totalPages + ' — ' + totalItems + ' registros'
+          pagWrap.appendChild(left); pagWrap.appendChild(right); wrap.appendChild(pagWrap)
+        }
       }
 
       function buildField(meta, value){
@@ -1314,6 +1380,19 @@
               }
             })
           }
+        }
+
+        // For matriculas: when creating a new matricula, default the date to today and disable the field
+        if(entity === 'matriculas' && !editing){
+          try{
+            const dateNode = inputs['data_matricula']
+            if(dateNode){
+              const today = new Date();
+              const iso = today.toISOString().slice(0,10)
+              dateNode.value = iso
+              dateNode.disabled = true
+            }
+          }catch(e){ console.warn('Could not set default data_matricula', e) }
         }
 
         // dynamic behavior for frequencias form: when turma-disciplina changes, limit matricula options to that turma
