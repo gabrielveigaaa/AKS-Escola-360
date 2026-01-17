@@ -211,7 +211,7 @@
         function refreshTipo(){
           const tipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
           dataNascWrap.style.display = tipo === 'aluno' ? '' : 'none'
-          cpfUsuarioWrap.style.display = (tipo === 'aluno' || tipo === 'professor') ? '' : 'none'
+          cpfUsuarioWrap.style.display = (tipo === 'aluno' || tipo === 'professor' || tipo === 'usuario') ? '' : 'none'
           dataAdmWrap.style.display = tipo === 'professor' ? '' : 'none'
           // show parent's name and sexo only for alunos
           nomeMaeWrap.style.display = tipo === 'aluno' ? '' : 'none'
