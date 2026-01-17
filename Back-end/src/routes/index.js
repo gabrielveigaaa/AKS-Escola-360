@@ -12,5 +12,7 @@ router.use('/matriculas', require('./matriculas'));
 router.use('/avaliacoes', require('./avaliacoes'));
 router.use('/notas', require('./notas'));
 router.use('/frequencias', require('./frequencias'));
+router.use('/enderecos', require('./enderecos'));
+router.use('/responsaveis', require('./responsaveis'));
 
 module.exports = router;

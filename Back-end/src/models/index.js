@@ -29,7 +29,9 @@ const {
   Matricula,
   Avaliacao,
   Nota,
-  Frequencia
+  Frequencia,
+  Endereco,
+  Responsavel
 } = db;
 
 if (Usuario && Perfil && UsuarioPerfil) {
@@ -95,6 +97,16 @@ if (Matricula && Frequencia) {
 if (TurmaDisciplina && Frequencia) {
   TurmaDisciplina.hasMany(Frequencia, { foreignKey: 'id_turma_disciplina' });
   Frequencia.belongsTo(TurmaDisciplina, { foreignKey: 'id_turma_disciplina' });
+}
+
+if (Usuario && Endereco) {
+  Usuario.hasMany(Endereco, { foreignKey: 'tb_usuarios_id_usuario' });
+  Endereco.belongsTo(Usuario, { foreignKey: 'tb_usuarios_id_usuario' });
+}
+
+if (Aluno && Usuario && Responsavel) {
+  Aluno.belongsToMany(Usuario, { through: Responsavel, foreignKey: 'tb_alunos_id_aluno', otherKey: 'tb_usuarios_id_usuario' });
+  Usuario.belongsToMany(Aluno, { through: Responsavel, foreignKey: 'tb_usuarios_id_usuario', otherKey: 'tb_alunos_id_aluno' });
 }
 
 module.exports = db;
