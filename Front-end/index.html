@@ -350,8 +350,8 @@
         // attach responsaveis section (only visible for alunos)
         try{
           const currentTipo = (opts && opts.tipo) ? opts.tipo : tipoSel.value
-          // show responsaveis section for alunos or when opening Cadastro de Responsáveis
-          responsaveisSection.style.display = (currentTipo === 'aluno' || (opts && opts.cadastroResponsaveis)) ? '' : 'none'
+          // show responsaveis section only for alunos
+          responsaveisSection.style.display = (currentTipo === 'aluno') ? '' : 'none'
         }catch(e){}
         area.appendChild(responsaveisSection)
 
