@@ -1559,10 +1559,26 @@
         // populate selects that have source and set editing values
         for(const f of meta.fields){
           if(f.type === 'select' && f.source){
-            const opts = await fetchOptions(f.source, f.valueKey || f.name, f.labelKey)
             const sel = inputs[f.name]
             sel.innerHTML = ''
-            opts.forEach(o=> sel.appendChild(new Option(o.label, o.value)))
+            // try fetchOptions (cached) first
+            let opts = await fetchOptions(f.source, f.valueKey || f.name, f.labelKey)
+            // if no options returned (cache or API empty), attempt a direct fetch as a fallback
+            if((!opts || opts.length === 0)){
+              try{
+                const raw = await axios.get(f.source)
+                const items = Array.isArray(raw.data)? raw.data : []
+                opts = items.map(it => {
+                  const val = (f.valueKey && it[f.valueKey] !== undefined) ? it[f.valueKey] : (it.id ?? Object.values(it)[0])
+                  const label = (f.labelKey && it[f.labelKey]) ? String(it[f.labelKey]) : (it.nome || it.descricao || it.email || it.cpf || String(val))
+                  return { value: val, label }
+                })
+                // update cache so subsequent calls benefit
+                if(opts && opts.length) OPTIONS_CACHE[f.source] = opts
+              }catch(e){ console.error('fallback fetchOptions', f.source, e) }
+            }
+            // populate select with options (or leave empty)
+            try{ (opts || []).forEach(o=> sel.appendChild(new Option(o.label, o.value))) }catch(e){}
             if(sel.dataset.pending){ sel.value = sel.dataset.pending; delete sel.dataset.pending }
             else if(editing && editing[f.name] !== undefined) sel.value = editing[f.name]
           } else {
