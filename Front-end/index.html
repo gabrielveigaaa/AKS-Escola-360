@@ -1559,10 +1559,26 @@
         // populate selects that have source and set editing values
         for(const f of meta.fields){
           if(f.type === 'select' && f.source){
-            const opts = await fetchOptions(f.source, f.valueKey || f.name, f.labelKey)
             const sel = inputs[f.name]
             sel.innerHTML = ''
-            opts.forEach(o=> sel.appendChild(new Option(o.label, o.value)))
+            // try fetchOptions (cached) first
+            let opts = await fetchOptions(f.source, f.valueKey || f.name, f.labelKey)
+            // if no options returned (cache or API empty), attempt a direct fetch as a fallback
+            if((!opts || opts.length === 0)){
+              try{
+                const raw = await axios.get(f.source)
+                const items = Array.isArray(raw.data)? raw.data : []
+                opts = items.map(it => {
+                  const val = (f.valueKey && it[f.valueKey] !== undefined) ? it[f.valueKey] : (it.id ?? Object.values(it)[0])
+                  const label = (f.labelKey && it[f.labelKey]) ? String(it[f.labelKey]) : (it.nome || it.descricao || it.email || it.cpf || String(val))
+                  return { value: val, label }
+                })
+                // update cache so subsequent calls benefit
+                if(opts && opts.length) OPTIONS_CACHE[f.source] = opts
+              }catch(e){ console.error('fallback fetchOptions', f.source, e) }
+            }
+            // populate select with options (or leave empty)
+            try{ (opts || []).forEach(o=> sel.appendChild(new Option(o.label, o.value))) }catch(e){}
             if(sel.dataset.pending){ sel.value = sel.dataset.pending; delete sel.dataset.pending }
             else if(editing && editing[f.name] !== undefined) sel.value = editing[f.name]
           } else {
@@ -1590,7 +1606,43 @@
             const tMap = {}; turmas.forEach(t=> tMap[t.id_turma] = t.nome)
             const dMap = {}; disciplinas.forEach(d=> dMap[d.id_disciplina] = d.nome)
             const tdMap = {}; tds.forEach(td=> tdMap[td.id_turma_disciplina] = td)
+            const avMap = {}; avals.forEach(av=> { const key = String(av.id_avaliacao || av.id); avMap[key] = av })
             const sel = inputs['id_avaliacao']
+            const matSel = inputs['id_matricula']
+            // when creating a new nota, ensure matricula select starts empty with a placeholder
+            if(matSel && !editing){ matSel.innerHTML = ''; matSel.appendChild(new Option('Selecione um aluno','')) }
+            // helper to rebuild matricula options filtered by turma of the selected avaliacao
+            const rebuildMatOptions = async (avaliacaoId)=>{
+              try{
+                if(!matSel) return
+                matSel.innerHTML = ''
+                matSel.appendChild(new Option('Selecione um aluno',''))
+                if(!avaliacaoId) return
+                // find turma id via avaliacao -> turma-disciplina
+                const av = avMap[String(avaliacaoId)]
+                const tdId = av ? (av.id_turma_disciplina || av.id_turma_disciplina) : null
+                const td = tdId ? tdMap[tdId] : null
+                const targetTurmaId = td ? td.id_turma : null
+                if(!targetTurmaId) return
+                // fetch matriculas and users to build friendly labels
+                const [mRes, aRes, uRes] = await Promise.all([axios.get('/matriculas'), axios.get('/alunos'), axios.get('/usuarios')])
+                const mats = Array.isArray(mRes.data)? mRes.data : []
+                const alunos = Array.isArray(aRes.data)? aRes.data : []
+                const users = Array.isArray(uRes.data)? uRes.data : []
+                const aMap = {}; alunos.forEach(a=> aMap[a.id_aluno] = a)
+                const uMap = {}; const uCpf = {}
+                users.forEach(u=> { uMap[u.id_usuario] = u.nome; uCpf[u.id_usuario] = u.cpf })
+                const filtered = mats.filter(m=> String(m.id_turma) === String(targetTurmaId))
+                filtered.forEach(m=>{
+                  const aluno = aMap[m.id_aluno]
+                  const label = aluno ? (uMap[aluno.id_usuario] || uCpf[aluno.id_usuario] || String(m.id_matricula)) : String(m.id_matricula)
+                  matSel.appendChild(new Option(label, m.id_matricula))
+                })
+                // if editing and editing.id_matricula present, try to set it
+                if(editing && editing.id_matricula) try{ matSel.value = editing.id_matricula }catch(e){}
+              }catch(e){ console.error('rebuildMatOptions for notas', e) }
+            }
+
             if(sel){
               sel.innerHTML = ''
               sel.appendChild(new Option('Selecione uma avaliação',''))
@@ -1603,8 +1655,10 @@
                 const val = av.id_avaliacao || av.id
                 sel.appendChild(new Option(label || String(val), val))
               })
-              // if editing, try to set the existing value
-              if(editing && editing.id_avaliacao) try{ sel.value = editing.id_avaliacao }catch(e){}
+              // when avaliacao changes, rebuild matricula options to match its turma
+              sel.addEventListener('change', ()=>{ try{ rebuildMatOptions(sel.value) }catch(e){} })
+              // if editing, set existing avaliacao and rebuild matriculas accordingly
+              if(editing && editing.id_avaliacao){ try{ sel.value = editing.id_avaliacao; await rebuildMatOptions(editing.id_avaliacao) }catch(e){} }
             }
           }catch(e){ console.error('populate notas avaliacao select', e) }
         }

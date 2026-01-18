@@ -14,7 +14,7 @@ CREATE TABLE tb_usuarios (
     ativo BOOLEAN NOT NULL DEFAULT 1,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     rg VARCHAR(45) DEFAULT NULL,
-    cpf VARCHAR(11) DEFAULT NULL
+    cpf VARCHAR(11) DEFAULT NULL UNIQUE
  ) ENGINE=InnoDB;
 
 -- ======================
