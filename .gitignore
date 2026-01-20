@@ -1,3 +1,13 @@
+# Environment files
+.env
+*.env
+Back-end/.env
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
 node_modules/
 *node_modules*
 Back-end/node_modules/
